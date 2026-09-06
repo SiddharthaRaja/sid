@@ -14,6 +14,7 @@ export const MODE = HAS_FIREBASE ? 'firebase' : 'local';
 
 let fb = null;          // { app, auth, db, storage, fns… }
 let currentUser = null;
+let redirectError = '';
 
 /* ---------------------------------------------------------- */
 /*  init                                                       */
@@ -31,6 +32,17 @@ export async function initBackend() {
 
   const app = appM.initializeApp(FIREBASE_CONFIG);
   const auth = authM.getAuth(app);
+
+  /* Keep the session in localStorage rather than memory, so closing
+     the tab or the installed app does not sign you out. */
+  try { await authM.setPersistence(auth, authM.browserLocalPersistence); } catch {}
+
+  /* If we came back from a redirect sign-in, collect the result.
+     onAuthStateChanged usually fires on its own, but calling this
+     surfaces the error when the redirect silently failed — which is
+     what a login loop looks like from the outside. */
+  try { await authM.getRedirectResult(auth); }
+  catch (e) { redirectError = e.message || String(e); }
 
   // Offline cache: edits made with no connection are queued and
   // flushed automatically the moment the network returns.
@@ -77,19 +89,41 @@ export function onAuth(cb) {
   });
 }
 
+/* Is the app running as an installed PWA rather than a browser tab? */
+const standalone = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true;
+
 export async function signIn() {
   if (!HAS_FIREBASE) return;
   const provider = new fb.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
+
+  /* Popup is the reliable path. Redirect sign-in breaks in current
+     browsers whenever the Firebase auth domain is a different origin
+     from the site — which it always is on GitHub Pages — because
+     third-party storage is partitioned and the returning session is
+     thrown away. That failure looks like a login loop: you sign in,
+     you come back, and you are asked to sign in again.
+
+     So: try the popup, and if it cannot open, say what to do rather
+     than sending you into the loop. */
   try {
     await fb.signInWithPopup(fb.auth, provider);
+    return;
   } catch (e) {
-    // Popups are blocked in some installed-PWA contexts — fall back.
-    if (/popup|blocked|cancelled/i.test(e.code || e.message || '')) {
-      await fb.signInWithRedirect(fb.auth, provider);
-    } else throw e;
+    const code = e.code || e.message || '';
+    if (/cancelled|closed-by-user/i.test(code)) return;   // you changed your mind
+    if (!/popup|blocked/i.test(code)) throw e;
   }
+
+  throw new Error(standalone()
+    ? 'Sign-in needs a popup, which an installed app cannot open. Open Sid in your normal browser, sign in there once, then reopen this app — the session carries over.'
+    : 'Your browser blocked the sign-in popup. Allow popups for this site and try again.');
 }
+
+/** Set when a redirect sign-in came back empty-handed. */
+export const lastRedirectError = () => redirectError;
 
 export async function signOutNow() {
   if (HAS_FIREBASE) await fb.signOut(fb.auth);
