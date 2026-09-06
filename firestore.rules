@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Sid — every document lives under the signed-in user's own uid.
+// Nobody can read or write anybody else's data.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

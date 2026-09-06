@@ -1,0 +1,39 @@
+{
+  "name": "Sid",
+  "short_name": "Sid",
+  "description": "Release, content, rights and finance management.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0f12",
+  "theme_color": "#0e0f12",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png" }
+  ],
+  "shortcuts": [
+    { "name": "Inbox", "url": "./index.html#/inbox" },
+    { "name": "Queue", "url": "./index.html#/queue" },
+    { "name": "Calendar", "url": "./index.html#/calendar" },
+    { "name": "Master plan", "url": "./index.html#/plan" }
+  ],
+  "share_target": {
+    "action": "./share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*", "video/*", "audio/*", "text/plain", ".pdf"]
+        }
+      ]
+    }
+  }
+}
