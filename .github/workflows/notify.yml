@@ -1,0 +1,52 @@
+# ============================================================
+#  Sid — daily notifications
+#
+#  Reads the notification plan the app wrote into Firestore and
+#  sends whatever is due today. Free: a public repo has unlimited
+#  Actions minutes, a private one gets 2,000 a month and this job
+#  uses about fifteen seconds of them a day.
+#
+#  Two things to know about GitHub's scheduler:
+#   • it is best-effort. A job asked for at 02:30 UTC often runs
+#     5–30 minutes late, more at the top of the hour. Times below
+#     are deliberately off the hour to reduce that.
+#   • scheduled workflows are switched off automatically after
+#     about 60 days with no commits to the repo. Push anything and
+#     they come back.
+# ============================================================
+
+name: Daily notifications
+
+on:
+  schedule:
+    # 02:37 UTC = 08:07 IST. Off the hour on purpose.
+    - cron: '37 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print what would be sent, send nothing'
+        type: boolean
+        default: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the two dependencies
+        run: npm install --no-save --no-audit --no-fund web-push firebase-admin
+
+      - name: Send what is due
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_SUBJECT: mailto:siddhartharaja36@gmail.com
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node tools/notify.mjs

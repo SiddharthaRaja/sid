@@ -118,7 +118,13 @@ export function field(label, obj, key, opts = {}) {
   return h('label', { class: 'field' }, h('span', { class: 'lab', text: label }), el);
 }
 
-function grow(el) { el.style.height = 'auto'; el.style.height = Math.max(el.scrollHeight, 90) + 'px'; }
+/* kept for callers that ask for it explicitly; js/mobile.js grows
+   every textarea in the app anyway, so this only forces an early one */
+function grow(el) {
+  el.style.height = 'auto';
+  const min = parseInt(getComputedStyle(el).minHeight, 10) || 0;
+  el.style.height = Math.max(el.scrollHeight, min) + 'px';
+}
 
 export function selectField(label, obj, key, options, opts = {}) {
   const el = h('select', {
@@ -172,6 +178,8 @@ export const empty = (title, sub) =>
   h('div', { class: 'empty' }, h('strong', { text: title }), sub || '');
 
 export function subtabs(items, active, onPick) {
+  /* a horizontal flick on the page moves between these */
+  import('./mobile.js').then(m => m.setSwipeTabs({ items, active, onPick })).catch(() => {});
   return h('div', { class: 'subtabs' },
     items.map(([k, label]) =>
       h('button', { class: `subtab ${k === active ? 'on' : ''}`, onClick: () => onPick(k) }, label)));

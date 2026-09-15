@@ -9,6 +9,15 @@ import { icon, PCOLORS } from './icons.js';
 import { PLATFORMS, PLATFORM_GROUPS, platformsIn } from './data/platforms.js';
 
 import { renderDashboard } from './modules/dashboard.js';
+import { renderRelease }   from './modules/release.js';
+import { renderWrite }     from './modules/write.js';
+import { renderSeo }       from './modules/seo.js';
+import { renderStudio }    from './modules/studio.js';
+import { renderMerch }     from './modules/merch.js';
+import { renderSite }      from './modules/site.js';
+import { renderMailList }  from './modules/maillist.js';
+import { renderPlaylists } from './modules/playlists.js';
+import { renderRunsheet }  from './modules/runsheet.js';
 import { renderCalendar }  from './modules/calendar.js';
 import { renderPlan }      from './modules/plan.js';
 import { renderPlatform }  from './modules/platform.js';
@@ -31,6 +40,11 @@ import { renderMeta }      from './modules/meta.js';
 import { renderInbox, drainShares, inboxCount } from './modules/inbox.js';
 import { calendarExportModal } from './modules/calexport.js';
 import * as R from './reader.js';
+import { applyTheme, cycleTheme, watchSystemTheme, themeMode } from './theme.js';
+import { initMobile, clearSwipeTabs } from './mobile.js';
+import { initCapture } from './capture.js';
+import { initPaste } from './paste.js';
+import * as PUSH from './push.js';
 
 import { SEED_MILESTONES } from './data/masterplan.js';
 import { REGISTRATIONS_SEED } from './data/rights.js';
@@ -48,8 +62,9 @@ const emptyPlatform = () => ({ content: {}, setupDone: {}, notes: '', stats: [],
 
 S.register('settings', () => ({
   artist: '', song: '', handle: '', link: '', city: '', genre: '',
-  releaseDate: '', theme: 'dark', label: '', email: '', comps: '',
+  releaseDate: '', draftRelease: '', mode: '', label: '', email: '', comps: '',
   isrc: '', upc: '', distributor: 'DistroKid', pro: 'BMI', publisher: 'Songtrust',
+  theme: 'dark', themeMode: 'dark', accent: 'ember',
 }));
 S.register('calendar', () => ({ events: [], visible: {} }));
 S.register('plan',     () => ({ milestones: null, custom: [] }));
@@ -69,11 +84,21 @@ S.register('meta',     () => ({ v: {}, splits: [], masters: [], notes: '' }));
 S.register('inbox',    () => ({ items: [] }));
 S.register('links',    () => ({ items: [], draft: null }));
 S.register('pitch',    () => ({ v: {}, promo: {}, history: [], playlists: [], submittedAt: '' }));
+S.register('push',      () => ({ sub: null, kinds: null, hour: 8, schedule: [], builtAt: '', device: '', tzOffset: 330 }));
+S.register('maillist',  () => ({ provider: '', dashUrl: '', signupUrl: '', offer: '', goal: 100, counts: [], sources: null, sends: [] }));
+S.register('playlists', () => ({ items: [] }));
+S.register('runsheet',  () => ({ done: {}, custom: [] }));
+S.register('studio',   () => ({ have: {}, notes: '' }));
+S.register('sprofile', () => ({ bio: '', tags: '', pickKind: 'song', pickUrl: '', pickNote: '', presaveUrl: '', presaves: 0, market: 'India' }));
+S.register('merch',    () => ({ costs: null, vendors: [], preorders: [], price: 899, units: 50, gate: 30 }));
+S.register('site',     () => ({ scenes: null, eggs: null, notes: '' }));
+S.register('write',    () => ({ phrases: [], swipe: [], batch: null }));
+S.register('seo',      () => ({ sets: null, keywords: [], yt: { title: '', desc: '', tags: '' } }));
 S.register('epk',      () => ({ photos: [], quotes: [], downloads: [], links: [], tagline: '', videoUrl: '', embedUrl: '', showFacts: true }));
 PLATFORMS.forEach(p => S.register(`p_${p.key}`, emptyPlatform));
 
 const ALL_SLICES = [
-  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch',
+  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch', 'write', 'seo', 'studio', 'sprofile', 'merch', 'site', 'maillist', 'playlists', 'runsheet', 'push',
   ...PLATFORMS.map(p => `p_${p.key}`),
 ];
 
@@ -140,6 +165,16 @@ function seedDefaults() {
 /* ---------------------------------------------------------- */
 
 const ROUTES = {
+  today:     { title: 'Today',              icon: 'dashboard',  render: (sub) => renderDashboard(sub, { merged: true }) },
+  release:   { title: 'Release',            icon: 'settings',   render: renderRelease },
+  write:     { title: 'Writing desk',        icon: 'copy',       render: renderWrite },
+  seo:       { title: 'Discovery',           icon: 'stats',      render: renderSeo },
+  studio:    { title: 'Asset studio',        icon: 'assets',     render: renderStudio },
+  list:      { title: 'Mailing list',        icon: 'contacts',   render: renderMailList },
+  playlists: { title: 'Playlists',           icon: 'spotify',    render: renderPlaylists },
+  runsheet:  { title: 'Release day',         icon: 'calendar',   render: renderRunsheet },
+  merch:     { title: 'Merch',               icon: 'finance',    render: renderMerch },
+  site:      { title: 'Website',             icon: 'epk',        render: renderSite },
   dashboard: { title: 'Dashboard',          icon: 'dashboard',  render: renderDashboard },
   queue:     { title: 'Queue',              icon: 'queue',      render: renderQueue },
   review:    { title: 'Weekly review',      icon: 'review',     render: renderReview },
@@ -163,10 +198,10 @@ const ROUTES = {
 };
 
 function parseHash() {
-  const raw = (location.hash || '#/dashboard').replace(/^#\/?/, '');
+  const raw = (location.hash || '#/today').replace(/^#\/?/, '');
   const [seg, ...rest] = raw.split('/');
   if (seg === 'p') return { kind: 'platform', key: rest[0], sub: rest[1] };
-  return { kind: 'route', key: ROUTES[seg] ? seg : 'dashboard', sub: rest[0] };
+  return { kind: 'route', key: ROUTES[seg] ? seg : 'today', sub: rest[0] };
 }
 
 export function go(hash) { location.hash = hash; }
@@ -198,10 +233,39 @@ function navSection(label) {
       set.navCollapsed[label] = !set.navCollapsed[label];
       S.touch('settings');
       buildNav();
-      markActive(location.hash || '#/dashboard');
+      markActive(location.hash || '#/today');
     },
   }, h('span', { text: label }), h('span', { class: 'caret', text: '\u25be' }));
 }
+
+/* Everything that is not one of the five. One list, used by the
+   sidebar's More section and by the phone's More sheet. */
+const MORE = [
+  ['Writing desk', '#/write', 'copy'],
+  ['Discovery', '#/seo', 'stats'],
+  ['Mailing list', '#/list', 'contacts'],
+  ['Playlists', '#/playlists', 'spotify', PCOLORS.spotify],
+  ['Release day', '#/runsheet', 'calendar'],
+  ['Asset studio', '#/studio', 'assets'],
+  ['Merch', '#/merch', 'finance'],
+  ['Website', '#/site', 'epk'],
+  ['Queue', '#/queue', 'queue'],
+  ['Inbox', '#/inbox', 'queue'],
+  ['Weekly review', '#/review', 'review'],
+  ['Copy bank', '#/copy', 'copy'],
+  ['Assets', '#/assets', 'assets'],
+  ['Music video', '#/video', 'video'],
+  ['Statistics', '#/stats', 'stats'],
+  ['Paid ads', '#/ads', 'ads'],
+  ['Press kit', '#/epk', 'epk'],
+  ['Radio', '#/radio', 'radio', PCOLORS.radio],
+  ['Metadata', '#/meta', 'rights'],
+  ['Rights & licensing', '#/rights', 'rights'],
+  ['Finance', '#/finance', 'finance'],
+  ['Notes', '#/notes', 'notes'],
+  ['History', '#/history', 'history'],
+  ['Settings', '#/settings', 'settings'],
+];
 
 function buildNav() {
   const box = clear($('#nav-scroll'));
@@ -222,53 +286,38 @@ function buildNav() {
   });
   box.append(h('div', { class: 'nav-filter' }, filter));
 
-  box.append(
-    navItem('Dashboard', '#/dashboard', 'dashboard'),
-    navItem('Inbox', '#/inbox', 'queue'),
-    navItem('Queue', '#/queue', 'queue'),
-    navItem('Weekly review', '#/review', 'review'),
-    navItem('Calendar', '#/calendar', 'calendar'),
-    navItem('Master plan', '#/plan', 'masterplan'),
-    navItem('Copy bank', '#/copy', 'copy'),
-    navItem('Contacts', '#/contacts', 'contacts'),
-  );
-
   const section = (label, items) => {
     box.append(navSection(label));
     if (navCollapsed()[label]) return;
     items.forEach(el => box.append(el));
   };
 
+  /* Five that earn a permanent place. Everything else is one tap
+     away under More, which stays collapsed until you open it. */
+  box.append(
+    navItem('Today', '#/today', 'dashboard'),
+    navItem('Calendar', '#/calendar', 'calendar'),
+    navItem('Release', '#/release', 'settings'),
+    navItem('Master plan', '#/plan', 'masterplan'),
+    navItem('Contacts', '#/contacts', 'contacts'),
+  );
+
   for (const g of PLATFORM_GROUPS) {
     section(g, platformsIn(g).map(p => navItem(p.name, `#/p/${p.key}`, p.icon, PCOLORS[p.key])));
   }
 
-  section('Business', [
-    navItem('Radio', '#/radio', 'radio', PCOLORS.radio),
-    navItem('Metadata', '#/meta', 'rights'),
-    navItem('Rights & licensing', '#/rights', 'rights'),
-    navItem('Finance', '#/finance', 'finance'),
-    navItem('Paid ads', '#/ads', 'ads'),
-    navItem('Press kit', '#/epk', 'epk'),
-  ]);
-
-  section('Production', [
-    navItem('Music video', '#/video', 'video'),
-    navItem('Assets', '#/assets', 'assets'),
-    navItem('Statistics', '#/stats', 'stats'),
-  ]);
-
-  section('Library', [
-    navItem('History', '#/history', 'history'),
-    navItem('Notes', '#/notes', 'notes'),
-    navItem('Settings', '#/settings', 'settings'),
-  ]);
+  if (navCollapsed()['More'] === undefined) {
+    const set = S.get('settings');
+    set.navCollapsed = set.navCollapsed || {};
+    set.navCollapsed['More'] = true;          // starts closed
+  }
+  section('More', MORE.map(([label, hash, ico, color]) => navItem(label, hash, ico, color)));
 
   // mobile bottom bar — four destinations plus everything else
   const tb = clear($('#tabbar'));
-  [['#/queue', 'Queue', 'queue'],
-   ['#/dashboard', 'Home', 'dashboard'],
+  [['#/today', 'Today', 'dashboard'],
    ['#/calendar', 'Calendar', 'calendar'],
+   ['#/release', 'Release', 'settings'],
    ['#/p/instagram', 'Platforms', 'instagram']].forEach(([hash, label, ico]) => {
     tb.append(h('button', { 'data-hash': hash, onClick: () => go(hash) },
       h('span', { html: icon(ico) }), h('span', { text: label })));
@@ -290,24 +339,8 @@ function moreSheet() {
   const body = h('div',
     h('div', { class: 'grid g3' },
       link('Master plan', '#/plan', 'masterplan'),
-      link('Copy bank', '#/copy', 'copy'),
       link('Contacts', '#/contacts', 'contacts'),
-      link('Music video', '#/video', 'video'),
-      link('Assets', '#/assets', 'assets'),
-      link('Weekly review', '#/review', 'review'),
-      link('Statistics', '#/stats', 'stats'),
-      link('Inbox', '#/inbox', 'queue'),
-      link('Notes', '#/notes', 'notes'),
-      link('History', '#/history', 'history')),
-    h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Business'),
-    h('div', { class: 'grid g3' },
-      link('Radio', '#/radio', 'radio', PCOLORS.radio),
-      link('Metadata', '#/meta', 'rights'),
-      link('Rights & licensing', '#/rights', 'rights'),
-      link('Finance', '#/finance', 'finance'),
-      link('Paid ads', '#/ads', 'ads'),
-      link('Press kit', '#/epk', 'epk'),
-      link('Settings', '#/settings', 'settings')),
+      MORE.map(([label, hash, ico, color]) => link(label, hash, ico, color))),
     h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Platforms'),
     h('div', { class: 'grid g3' },
       PLATFORMS.map(p => link(p.name, `#/p/${p.key}`, p.icon, PCOLORS[p.key]))));
@@ -339,6 +372,7 @@ function route() {
   const r = parseHash();
   const view = clear($('#view'));
   window.scrollTo(0, 0);
+  clearSwipeTabs();          // the new page re-registers if it has subtabs
 
   try {
     if (r.kind === 'platform') {
@@ -364,16 +398,6 @@ function route() {
 /* ---------------------------------------------------------- */
 /*  theme                                                      */
 /* ---------------------------------------------------------- */
-
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name=theme-color]')
-    ?.setAttribute('content', t === 'dark' ? '#0e0f12' : '#f7f6f4');
-  const st = document.styleSheets;
-  // toggle which half of the theme glyph shows
-  $$('.ico-moon').forEach(e => e.style.display = t === 'dark' ? '' : 'none');
-  $$('.ico-sun').forEach(e => e.style.display = t === 'dark' ? 'none' : '');
-}
 
 /* ---------------------------------------------------------- */
 /*  search palette                                             */
@@ -489,7 +513,16 @@ async function start() {
     } catch (e) { console.warn('share drain failed', e); }
 
     const set = S.get('settings');
-    applyTheme(set.theme || 'dark');
+
+    /* Which mode is this project in? Older saves have no `mode`,
+       so infer it once from whether a release date was ever set. */
+    if (!set.mode) { set.mode = set.releaseDate ? 'execution' : 'planning'; S.touch('settings'); }
+    if (set.mode === 'execution' && !set.draftRelease && set.releaseDate) {
+      set.draftRelease = set.releaseDate; S.touch('settings');
+    }
+    if (!set.themeMode) { set.themeMode = set.theme === 'light' ? 'light' : 'dark'; S.touch('settings'); }
+
+    applyTheme();
 
     $('#user-name').textContent = u.displayName || u.email || 'Local';
     if (u.photoURL) $('#user-pic').src = u.photoURL; else $('#user-pic').remove();
@@ -502,6 +535,11 @@ async function start() {
 
     // a snapshot every time you open the app
     S.snapshotNow('session-open').catch(() => {});
+
+    /* Refresh the notification plan. The sender only ever forwards
+       what was planned here, so opening the app is what keeps the
+       notifications alive — said plainly in Settings. */
+    try { PUSH.rebuild(); } catch (e) { console.warn('push plan', e); }
   });
 }
 
@@ -524,10 +562,8 @@ $('#btn-google').addEventListener('click', async () => {
 });
 
 $('#btn-theme').addEventListener('click', () => {
-  const set = S.get('settings');
-  set.theme = (document.documentElement.dataset.theme === 'dark') ? 'light' : 'dark';
-  S.touch('settings');
-  applyTheme(set.theme);
+  const next = cycleTheme();
+  toast(next === 'system' ? 'Theme: matching your device' : `Theme: ${next}`);
 });
 
 $('#nav-open').addEventListener('click', openNav);
@@ -538,9 +574,40 @@ $('#btn-search').addEventListener('click', palette);
 
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette(); }
+
+  /* the rest only when you are not typing into something */
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  if (document.activeElement?.isContentEditable) return;
+
+  if (e.key === 'Escape') closeNav();
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); shortcutSheet(); }
 });
 
-applyTheme('dark');
+function shortcutSheet() {
+  const row = (keys, what) => h('div', { class: 'item' },
+    h('div', { class: 'item-head' },
+      h('span', { class: 'kbd', text: keys }),
+      h('span', { class: 'item-title', text: what })));
+
+  modal({
+    title: 'Shortcuts',
+    body: h('div', { class: 'list' },
+      row('⌘K / Ctrl K', 'Jump to anything — pages, posts, contacts, campaigns'),
+      row('⌘⇧N / Ctrl ⇧N', 'Quick capture: a line, a photo, a voice note'),
+      row('?', 'This list'),
+      row('Esc', 'Close a dialog, or the menu'),
+      row('Space', 'Play or pause the reader, when something is loaded'),
+      row('Paste', 'Anywhere outside a text box — Sid works out what it is'),
+      row('Swipe', 'On a phone: sideways to change sub-tab, or across a queue row to post or snooze it')),
+    actions: [{ label: 'Done', cls: 'btn-primary' }],
+  });
+}
+
+applyTheme();
+watchSystemTheme();
+initMobile(S.pendingCount);
+initCapture();
+initPaste();
 start();
 
 /* ---------------------------------------------------------- */

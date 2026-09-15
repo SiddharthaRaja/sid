@@ -133,7 +133,7 @@ export function pitchPanel() {
     if (!p.known) {
       return card(cardHead('No release date set'),
         h('p', { class: 'small muted', style: { margin: 0 },
-          text: 'Set your release date in Settings and this becomes a countdown to the pitch deadline.' }));
+          text: 'Set your release date on the Release tab and this becomes a countdown to the pitch deadline.' }));
     }
 
     const box = card(

@@ -13,6 +13,7 @@ import { CALENDARS, calColor, calName, collectEvents, eventsByDay } from '../age
 import { scheduleRow } from './shared.js';
 import { calendarExportModal } from './calexport.js';
 import { icon } from '../icons.js';
+import { modeBanner, planningTimeline } from './timeline.js';
 
 let cursor = null;      // first of the displayed month
 let view = 'month';
@@ -29,6 +30,20 @@ export function renderCalendar() {
 
   const draw = () => {
     clear(root);
+
+    /* Planning mode has no release date, so relative dates resolve
+       to nothing and a month grid would be a lie. Show the T-axis. */
+    if (S.get('settings').mode === 'planning') {
+      root.append(h('div', { class: 'page-head' },
+        h('div', {},
+          h('h1', { text: 'Timeline' }),
+          h('div', { class: 'sub', text: 'Planning mode — days before and after release, not calendar days.' })),
+        h('div', { class: 'spacer' })));
+      root.append(modeBanner('calendar'));
+      root.append(planningTimeline());
+      return;
+    }
+
     const events = collectEvents().filter(e => cal.visible[e.cal] !== false);
     const byDay = eventsByDay(events);
 
@@ -175,7 +190,7 @@ function agenda(events, redraw) {
   const set = S.get('settings');
   const today = todayISO();
   const future = events.filter(e => e.iso >= today);
-  if (!future.length) return empty('Nothing scheduled ahead', 'Add something, or set a release date in Settings and use T-offsets.');
+  if (!future.length) return empty('Nothing scheduled ahead', 'Add something, or set a release date on the Release tab and use T-offsets.');
 
   const box = h('div');
   const byDay = eventsByDay(future);

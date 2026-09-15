@@ -36,7 +36,7 @@ export function renderPlan(sub) {
         h('h1', { text: 'Master plan' }),
         h('div', { class: 'sub', text: set.releaseDate
           ? `Release ${fmtDate(set.releaseDate, { long: true })} · ${relativeDay(set.releaseDate)}`
-          : 'Set a release date in Settings and every milestone below gets a real date.' })),
+          : 'Planning mode — every milestone sits at a T-offset. Set a release date on the Release tab to give them real dates.' })),
       h('div', { class: 'spacer' }),
       h('div', { class: 'page-actions' },
         btn('Add milestone', () => openMilestone(null, draw), { cls: 'btn-primary btn-sm', icon: 'plus' }),

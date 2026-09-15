@@ -45,7 +45,7 @@ export function renderCopy(sub) {
           h('div', { style: { flex: 1 } },
             h('div', { style: { fontWeight: 500 } }, 'Fill these in Settings and every piece below completes itself'),
             h('div', { class: 'small muted', text: gaps.map(g => g.label).join(' · ') })),
-          h('a', { class: 'btn btn-sm', href: '#/settings' }, 'Open Settings'))));
+          h('a', { class: 'btn btn-sm', href: '#/release' }, 'Open the Release tab'))));
     }
 
     root.append(subtabs(groups.map(g => [g, g]), tab, k => { tab = k; draw(); }));

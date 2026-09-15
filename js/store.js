@@ -103,6 +103,9 @@ async function flush(id) {
   maybeSnapshot();
 }
 
+/** How many slices are waiting to be written. */
+export const pendingCount = () => dirty.size;
+
 export async function flushAll() {
   await Promise.all([...dirty].map(flush));
 }

@@ -11,6 +11,8 @@ import {
 } from '../ui.js';
 import { icon } from '../icons.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
+import { writingAids } from './compose.js';
+import { mediaFromUrl } from '../drive.js';
 
 export const STATUSES = [
   ['idea', 'Idea'], ['draft', 'Draft'], ['ready', 'Ready'],
@@ -32,17 +34,39 @@ export function mediaBlock(obj, slice, pathHint) {
       const grid = h('div', { class: 'media-grid' });
       obj.media.forEach((m, i) => {
         const cell = h('div', { class: 'media-cell' });
-        if (m.kind === 'video') {
+        if (m.kind === 'link' || (m.external && m.kind === 'video')) {
+          /* a pasted link we cannot preview — show it as a link, which
+             is honest and still opens the thing */
+          cell.append(h('a', { class: 'linkcell', href: m.open || m.url, target: '_blank', rel: 'noopener',
+            onClick: (e) => e.stopPropagation() },
+            h('span', { html: icon('epk') }),
+            h('span', { class: 'lc-name', text: m.name || 'link' })));
+        } else if (m.kind === 'video') {
           cell.append(h('video', { src: m.url, muted: true, playsinline: true, preload: 'metadata',
             onClick: (e) => { e.target.paused ? e.target.play() : e.target.pause(); } }));
         } else if (m.kind === 'audio') {
           cell.append(h('div', { style: { display: 'grid', placeItems: 'center', height: '100%' },
             html: icon('soundcloud') }));
         } else {
-          cell.append(h('img', { src: m.url, alt: m.name, loading: 'lazy',
-            onClick: () => window.open(m.url, '_blank') }));
+          cell.append(h('img', { src: m.url, alt: m.alt || m.name, loading: 'lazy',
+            onClick: () => window.open(m.open || m.url, '_blank'),
+            onError: (e) => {
+              /* a Drive file that is not shared, or a dead link */
+              e.target.replaceWith(h('a', { class: 'linkcell', href: m.open || m.url, target: '_blank', rel: 'noopener' },
+                h('span', { html: icon('epk') }),
+                h('span', { class: 'lc-name', text: 'open' })));
+            } }));
         }
         cell.append(h('span', { class: 'kind', text: m.kind }));
+        if (m.kind === 'image') {
+          /* alt text is a search field on Instagram and the only way a
+             blind listener knows what the picture is. Ten seconds. */
+          cell.append(h('input', {
+            class: 'alt', value: m.alt || '', placeholder: 'alt text…',
+            onClick: (e) => e.stopPropagation(),
+            onInput: (e) => { m.alt = e.target.value; S.touch(slice); },
+          }));
+        }
         cell.append(h('button', {
           class: 'rm', html: '&times;', title: 'Remove',
           onClick: async (e) => {
@@ -65,6 +89,29 @@ export function mediaBlock(obj, slice, pathHint) {
     const drop = h('div', { class: 'drop', onClick: () => input.click() },
       obj.media.length ? 'Add more — click or drop files' : 'Drop images or video here, or click to choose');
 
+    /* Inline rather than a modal: this often runs *inside* the item
+       editor, and the app has a single modal root — a second modal
+       would replace the first and take the attachment grid with it. */
+    const linkRow = h('div', { class: 'linkrow', hidden: true });
+    const linkInp = h('input', { class: 'inp', placeholder: 'https://drive.google.com/file/d/…' });
+    const nameInp = h('input', { class: 'inp', style: { maxWidth: '150px' }, placeholder: 'what it is' });
+    const addLink = () => {
+      const m = mediaFromUrl(linkInp.value, nameInp.value);
+      if (!m) { linkInp.focus(); return; }
+      obj.media.push(m);
+      S.touch(slice);
+      draw();
+    };
+    linkInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } });
+    linkRow.append(linkInp, nameInp,
+      btn('Add', addLink, { cls: 'btn-sm btn-primary' }),
+      btn('Cancel', () => { linkRow.hidden = true; }, { cls: 'btn-sm btn-ghost' }));
+
+    const linkBtn = btn('Paste a link instead', () => {
+      linkRow.hidden = false;
+      linkInp.focus();
+    }, { cls: 'btn-sm btn-ghost' });
+
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', (e) => {
@@ -85,7 +132,11 @@ export function mediaBlock(obj, slice, pathHint) {
       S.touch(slice); draw();
     }
 
-    wrap.append(input, drop);
+    wrap.append(input, drop,
+      h('div', { class: 'row', style: { marginTop: '7px' } }, linkBtn),
+      linkRow,
+      h('div', { class: 'small muted', style: { marginTop: '5px' },
+        text: 'A Google Drive share link previews here like an upload, needs no permission, and never expires.' }));
   };
   draw();
   return wrap;
@@ -117,7 +168,9 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
   };
   const asT = (n) => (n === 0 ? 'T' : n > 0 ? `T+${n}` : `T${n}`);
 
+  const planningMode = () => S.get('settings').mode === 'planning';
   let mode = isT(item[key]) ? 'rel' : isISO(item[key]) ? 'abs' : (opts.defaultMode || 'rel');
+  if (planningMode() && mode === 'abs' && !isISO(item[key])) mode = 'rel';
 
   const commit = (v) => {
     item[key] = v;
@@ -135,7 +188,9 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
 
     const box = h('div', { class: 'dateas' });
 
-    /* mode switch */
+    /* mode switch — planning mode offers offsets only, since there
+       is no release date for a calendar date to sit beside */
+    const planning = planningMode();
     box.append(h('div', { class: 'seg' },
       h('button', { class: mode === 'rel' ? 'on' : '', onClick: () => {
         // carry a calendar date across as its offset
@@ -144,8 +199,8 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
           if (isISO(item[key]) && rel) return commit(asT(daysBetween(rel, item[key])));
           draw();
         }
-      } }, 'Relative to release'),
-      h('button', { class: mode === 'abs' ? 'on' : '', onClick: () => {
+      } }, planning ? 'Days from release' : 'Relative to release'),
+      planning ? null : h('button', { class: mode === 'abs' ? 'on' : '', onClick: () => {
         if (mode !== 'abs') {
           mode = 'abs';
           if (isT(item[key]) && rel) return commit(addDays(rel, offsetOf(item[key])));
@@ -153,6 +208,17 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
         }
       } }, 'Calendar date'),
       opts.required ? null : h('button', { class: !item[key] ? 'on' : '', onClick: () => commit('') }, 'No date')));
+
+    if (planning && isISO(item[key])) {
+      box.append(h('div', { class: 'warnline' },
+        'This one is written as a fixed calendar date. It stays put — set a release date to convert it to an offset.'));
+      box.append(h('div', { class: 'row', style: { marginTop: '8px' } },
+        h('input', {
+          type: 'date', class: 'inp', style: { maxWidth: '175px' }, value: item[key],
+          onChange: (e) => commit(e.target.value),
+        }),
+        h('button', { class: 'chip', onClick: () => commit('T-30') }, 'Make it T-30 instead')));
+    }
 
     /* the input for the chosen mode */
     if (mode === 'rel') {
@@ -204,7 +270,16 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
       if (!item[key]) { resolved.append(h('span', { class: 'muted', text: 'No date set.' })); return; }
 
       if (!d) {
-        if (!relDate) warn.textContent = 'Set a release date in Settings and this resolves to a real day.';
+        if (planningMode()) {
+          const n = isT(item[key]) ? offsetOf(item[key]) : null;
+          resolved.append(h('span', { class: 'big', text: isT(item[key]) ? String(item[key]) : String(item[key]) }));
+          resolved.append(h('span', { class: 'muted small', text: n === null ? '' :
+            n === 0 ? 'release day itself' :
+            n < 0 ? `${-n} day${n === -1 ? '' : 's'} before release` : `${n} day${n === 1 ? '' : 's'} after release` }));
+          warn.textContent = 'Planning mode — this becomes a real day the moment you set a release date.';
+          return;
+        }
+        if (!relDate) warn.textContent = 'Set a release date on the Release tab and this resolves to a real day.';
         else warn.textContent = 'That is not a date Sid can read.';
         return;
       }
@@ -233,8 +308,9 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
 /*  generic content item editor                                */
 /* ---------------------------------------------------------- */
 
-export function itemEditor({ item, slice, type, pathHint, onSave, onDelete }) {
+export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, onDelete, onDuplicate }) {
   const body = h('div');
+  const pkey = platformKey || String(pathHint || '').split('/')[0] || '';
 
   const counter = h('div', { class: 'small muted', style: { textAlign: 'right', marginTop: '-6px' } });
   const gaps = h('div', { class: 'small', style: { color: 'var(--warn)', marginTop: '4px' } });
@@ -251,15 +327,53 @@ export function itemEditor({ item, slice, type, pathHint, onSave, onDelete }) {
   const bodyInput = field(null, item, 'body', {
     slice, multiline: true, tall: true,
     placeholder: type.hint || 'Write it exactly as it will be posted…',
-    onInput: paintCount,
+    onInput: () => { paintCount(); aids.refresh(); },
   });
   paintCount();
+
+  /* the linter, the fold preview, the phrase bank and the optional
+     assistant — all reading and writing this one textarea */
+  const aids = writingAids({
+    getText: () => item.body || '',
+    setText: (t) => {
+      item.body = t;
+      const ta = bodyInput.querySelector ? bodyInput.querySelector('textarea') : null;
+      (ta || bodyInput).value = t;
+      S.touch(slice); paintCount();
+    },
+    platform: pkey, type: type.key, exclude: item,
+  });
+  aids.setLimit(type.limit || 0);
+  aids.refresh();
+
+  /* ---- A/B: a second version, and which one actually went out ---- */
+  const variantBox = h('div');
+  const drawVariant = () => {
+    clear(variantBox);
+    if (!item.variantB && !item.showB) {
+      variantBox.append(btn('Write a B version', () => { item.showB = true; S.touch(slice); drawVariant(); }, { cls: 'btn-sm btn-ghost' }));
+      return;
+    }
+    variantBox.append(
+      field('Version B', item, 'variantB', { slice, multiline: true,
+        placeholder: 'A different angle on the same post. Post one, note which, and the weekly review tells you which shape works.' }),
+      h('div', { class: 'row' },
+        h('span', { class: 'small muted', text: 'Which went out:' }),
+        ['', 'A', 'B'].map(v => h('button', {
+          class: `chip ${(item.posted_variant || '') === v ? 'on' : ''}`,
+          onClick: () => { item.posted_variant = v; S.touch(slice); drawVariant(); },
+        }, v || 'not yet')),
+        item.variantB ? btn('Copy B', () => copy(item.variantB), { cls: 'btn-sm btn-ghost' }) : null));
+  };
+  drawVariant();
 
   body.append(
     field('Title / label', item, 'title', { slice, placeholder: 'Internal name — not posted' }),
     h('label', { class: 'field' },
       h('span', { class: 'lab', text: type.limit ? `Text (limit ${type.limit})` : 'Text' }),
       bodyInput, counter, gaps),
+    aids.el,
+    variantBox,
     type.hint ? h('p', { class: 'small muted', text: type.hint }) : null,
     h('div', { class: 'grid g2' },
       selectField('Status', item, 'status', STATUSES, { slice }),
@@ -275,6 +389,22 @@ export function itemEditor({ item, slice, type, pathHint, onSave, onDelete }) {
     body, wide: true,
     actions: [
       { label: 'Copy text', cls: 'btn-ghost', keepOpen: true, onClick: () => copy(item.body || '') },
+      /* a variant of something that worked is the cheapest post you
+         will ever write — one tap, then change the hook */
+      { label: 'Duplicate', cls: 'btn-ghost', onClick: () => {
+        const store = S.get(slice);
+        const arr = (store.content && store.content[type.key]) || null;
+        if (!arr) return;
+        arr.push({
+          ...JSON.parse(JSON.stringify(item)),
+          id: uid(), status: 'draft', postedAt: '', posted_variant: '',
+          title: `${item.title || 'Untitled'} (copy)`,
+        });
+        S.touch(slice);
+        toast('Duplicated as a draft');
+        onDuplicate?.();
+        onSave?.();
+      } },
       { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { onDelete?.(); } },
       'spacer',
       { label: 'Done', cls: 'btn-primary', onClick: () => onSave?.() },

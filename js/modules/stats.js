@@ -11,6 +11,35 @@ import { PLATFORMS, PLATFORM_MAP } from '../data/platforms.js';
 import { PCOLORS, icon } from '../icons.js';
 import { barRows, lineChart, sparkline, withTable, tableView, seriesColor, legend } from '../charts.js';
 import { notesPanel } from './shared.js';
+import { collectMarks, groupMarks, MARK_KINDS } from '../marks.js';
+
+/* ---------------------------------------------------------- */
+/*  annotations                                                */
+/* ---------------------------------------------------------- */
+
+/* Which kinds of event are drawn on the charts. Stored once in the
+   stats slice so the choice follows you between platform tabs. */
+export function activeKinds() {
+  const st = S.get('stats');
+  if (!st.markKinds) st.markKinds = MARK_KINDS.map(k => k[0]);
+  return st.markKinds;
+}
+
+function markPicker(slice, redraw) {
+  const on = activeKinds();
+  return h('div', { class: 'row', style: { margin: '0 0 10px' } },
+    h('span', { class: 'small muted', text: 'Mark:' }),
+    MARK_KINDS.map(([k, label]) => h('button', {
+      class: `chip ${on.includes(k) ? 'on' : ''}`,
+      onClick: () => {
+        const at = on.indexOf(k);
+        if (at > -1) on.splice(at, 1); else on.push(k);
+        S.touch('stats');
+        redraw();
+      },
+    }, label)),
+    h('span', { class: 'small muted', text: '— hover a line to see what happened' }));
+}
 
 /* ---------------------------------------------------------- */
 /*  shared shapes                                              */
@@ -113,13 +142,22 @@ export function statsPanel(p, store, slice) {
         points: entries.filter(e => e.m[mname] != null && e.m[mname] !== '').map(e => ({ x: e.date, y: +e.m[mname] })),
       }));
 
+      const annoWrap = h('div');
+      const drawAnno = () => {
+        clear(annoWrap);
+        annoWrap.append(
+          markPicker(slice, () => drawAnno()),
+          withTable(
+            lineChart(series, { height: 230, marks: groupMarks(collectMarks({ platform: p.key, kinds: activeKinds() })) }),
+            ['Date', ...chosen],
+            entries.map(e => [e.date, ...chosen.map(m => e.m[m] ?? '—')])));
+      };
+      drawAnno();
+
       root.append(card(
         cardHead('Growth over time', h('span', { class: 'small muted', text: 'one y-axis — pick metrics of a similar scale, or use Compare' })),
         picker,
-        withTable(
-          lineChart(series, { height: 230 }),
-          ['Date', ...chosen],
-          entries.map(e => [e.date, ...chosen.map(m => e.m[m] ?? '—')]))));
+        annoWrap));
     }
 
     /* demographics */
@@ -542,9 +580,18 @@ function comparePanel() {
     return { name: p.name, points: pts.map(pt => ({ x: pt.x, y: +(pt.y / base * 100).toFixed(1) })) };
   }).filter(s => s.points.length);
 
+  const cmpWrap = h('div');
+  const drawCmp = () => {
+    clear(cmpWrap);
+    cmpWrap.append(
+      markPicker('stats', () => drawCmp()),
+      lineChart(series, { height: 240, marks: groupMarks(collectMarks({ kinds: activeKinds() })) }));
+  };
+  drawCmp();
+
   box.append(card(
     cardHead('Relative growth', h('span', { class: 'small muted', text: 'each platform indexed to 100 at its first snapshot' })),
-    lineChart(series, { height: 240 })));
+    cmpWrap));
 
   const headers = ['Platform', 'Metric', 'First', 'Latest', 'Change'];
   const rows = withData.map(({ p, st }) => {

@@ -14,6 +14,7 @@ import { INFO } from '../data/info.js';
 import { SMALL_PLATFORMS } from '../data/platforms.js';
 import { statsPanel } from './stats.js';
 import { pitchPanel } from './pitch.js';
+import { spotifyProfilePanel } from './sprofile.js';
 
 export function renderPlatform(p, sub) {
   const slice = `p_${p.key}`;
@@ -26,7 +27,7 @@ export function renderPlatform(p, sub) {
        deadline in the release that cannot be recovered from once
        missed, so it lives on the platform page rather than buried
        in a checklist. */
-    ...(p.key === 'spotify' ? [['epitch', 'Editorial pitch']] : []),
+    ...(p.key === 'spotify' ? [['epitch', 'Editorial pitch'], ['profile', 'Profile & unlocks']] : []),
     ['setup', 'Setup'],
     ['stats', 'Stats'],
     ['info', 'Info'],
@@ -59,6 +60,8 @@ export function renderPlatform(p, sub) {
       root.append(contentList({ slice, store, type, pathHint: `${p.key}/${type.key}`, platformKey: p.key, onChanged: refreshHeader }));
     } else if (active === 'epitch') {
       root.append(pitchPanel());
+    } else if (active === 'profile') {
+      root.append(spotifyProfilePanel());
     } else if (active === 'setup') {
       root.append(setupPanel(p, store, slice, refreshHeader));
     } else if (active === 'stats') {

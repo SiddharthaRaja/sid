@@ -12,6 +12,9 @@ import {
 import { PLATFORMS, PLATFORM_MAP } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
 import { itemEditor, STATUSES, STATUS_TAG } from './shared.js';
+import { PHASES, phaseOfOffset, phaseTitle, offsetOf, isISO } from '../phases.js';
+import { modeBanner } from './timeline.js';
+import { swipeRow } from '../mobile.js';
 
 /* Shift a date by n days, keeping whichever notation it was written in. */
 export function shiftWhen(when, n) {
@@ -26,10 +29,12 @@ export function shiftWhen(when, n) {
   return s;
 }
 
-export function renderQueue(sub) {
+export function renderQueue(sub, opts = {}) {
   const root = h('div');
   const set = S.get('settings');
   const today = todayISO();
+  const embed = !!opts.embed;
+  const planning = () => S.get('settings').mode === 'planning';
 
   let platformFilter = 'all';
   let readyOnly = false;
@@ -57,6 +62,8 @@ export function renderQueue(sub) {
     clear(root);
     const all = collect();
 
+    if (planning()) { drawPlanning(all); return; }
+
     const live = all.filter(r =>
       (platformFilter === 'all' || r.p.key === platformFilter) &&
       (!readyOnly || ['ready', 'scheduled'].includes(r.item.status)));
@@ -78,7 +85,7 @@ export function renderQueue(sub) {
     }).length;
 
     /* header */
-    root.append(h('div', { class: 'page-head' },
+    if (!embed) root.append(h('div', { class: 'page-head' },
       h('div', {},
         h('h1', { text: 'Queue' }),
         h('div', { class: 'sub', text: set.releaseDate
@@ -86,7 +93,7 @@ export function renderQueue(sub) {
           : fmtDate(today, { long: true }) })),
       h('div', { class: 'spacer' })));
 
-    root.append(h('div', { class: 'grid g4' },
+    if (!embed) root.append(h('div', { class: 'grid g4' },
       stat('Due today', String(todayRows.filter(isOpen).length), todayRows.length !== todayRows.filter(isOpen).length
         ? `${todayRows.length - todayRows.filter(isOpen).length} already done` : ''),
       stat('Overdue', String(overdue.length), overdue.length ? 'oldest ' + relativeDay(overdue[0].iso) : 'nothing behind'),
@@ -95,7 +102,7 @@ export function renderQueue(sub) {
 
     /* filters */
     const withCounts = PLATFORMS.filter(p => all.some(r => r.p.key === p.key));
-    root.append(h('div', { class: 'row', style: { margin: '16px 0 4px' } },
+    if (!embed) root.append(h('div', { class: 'row', style: { margin: '16px 0 4px' } },
       h('button', { class: `chip ${platformFilter === 'all' ? 'on' : ''}`,
         onClick: () => { platformFilter = 'all'; draw(); } }, `All ${all.length}`),
       withCounts.map(p => h('button', {
@@ -107,25 +114,83 @@ export function renderQueue(sub) {
         'Ready & scheduled only')));
 
     /* sections */
-    if (overdue.length) root.append(section('Overdue', overdue, 'bad'));
-    root.append(section(`Today — ${fmtDate(today, { long: true })}`, todayRows, null, todayRows.length
+    if (overdue.length) root.append(section(embed ? 'Posts overdue' : 'Overdue', overdue, 'bad'));
+    root.append(section(embed ? 'Posts due today' : `Today — ${fmtDate(today, { long: true })}`, todayRows, null, todayRows.length
       ? null : 'Nothing due. A good day to bank three clips, or pull a template into a draft.'));
-    if (week.length) root.append(section('Next 7 days', week));
-    if (undated.length) root.append(section('Banked, no date yet', undated, null, null,
+    if (week.length && !embed) root.append(section('Next 7 days', week));
+    if (undated.length && !embed) root.append(section('Banked, no date yet', undated, null, null,
       'These are written but unscheduled. Give them a date and they appear above and on the calendar.'));
 
-    if (later.length) {
+    if (later.length && !embed) {
       root.append(h('div', { style: { marginTop: '14px' } },
         btn(showLater ? `Hide the other ${later.length}` : `Show ${later.length} scheduled further out`,
           () => { showLater = !showLater; draw(); }, { cls: 'btn-sm btn-ghost' })));
       if (showLater) root.append(section('Later', later));
     }
 
-    if (!all.length) {
+    if (!all.length && !embed) {
       root.append(empty('Nothing in the bank yet',
         'Open a platform tab and use the Templates button — the drafted posts arrive already dated to their T-offset.'));
     }
   };
+
+  /* ---------- planning mode ---------- */
+  /* No release date, so no "today" and nothing can be overdue.
+     The posts sit on the T-axis, grouped by phase, in the same
+     order they will go out once a date exists. */
+  function drawPlanning(all) {
+    if (!embed) {
+      root.append(h('div', { class: 'page-head' },
+        h('div', {},
+          h('h1', { text: 'Queue' }),
+          h('div', { class: 'sub', text: 'Planning mode — posts in T-order, not calendar order.' })),
+        h('div', { class: 'spacer' })));
+      const mb = modeBanner('queue');
+      if (mb) root.append(mb);
+    }
+
+    const live = all.filter(r =>
+      (platformFilter === 'all' || r.p.key === platformFilter) &&
+      (!readyOnly || ['ready', 'scheduled'].includes(r.item.status)));
+
+    const withOff = live.map(r => ({ ...r, off: offsetOf(r.item.when) }));
+    const placed  = withOff.filter(r => r.off !== null);
+    const fixed   = withOff.filter(r => r.off === null && isISO(r.item.when));
+    const undated = withOff.filter(r => r.off === null && !isISO(r.item.when));
+
+    if (!embed) {
+      const withCounts = PLATFORMS.filter(p => all.some(r => r.p.key === p.key));
+      root.append(h('div', { class: 'grid g3' },
+        stat('Posts written', String(all.length), `${placed.length} placed on the T-axis`),
+        stat('Earliest', placed.length ? asT(Math.min(...placed.map(r => r.off))) : '—', 'first thing out'),
+        stat('Undated', String(undated.length), 'written but not placed')));
+      root.append(h('div', { class: 'row', style: { margin: '16px 0 4px' } },
+        h('button', { class: `chip ${platformFilter === 'all' ? 'on' : ''}`,
+          onClick: () => { platformFilter = 'all'; draw(); } }, `All ${all.length}`),
+        withCounts.map(p => h('button', {
+          class: `chip ${platformFilter === p.key ? 'on' : ''}`,
+          onClick: () => { platformFilter = p.key; draw(); },
+        }, h('span', { class: 'dot', style: { background: PCOLORS[p.key] } }), p.name)),
+        h('span', { style: { width: '8px' } }),
+        h('button', { class: `chip ${readyOnly ? 'on' : ''}`, onClick: () => { readyOnly = !readyOnly; draw(); } },
+          'Ready & scheduled only')));
+    }
+
+    PHASES.forEach(ph => {
+      const rows = placed.filter(r => phaseOfOffset(r.off).key === ph.key)
+        .sort((a, b) => a.off - b.off || byPlatform(a, b));
+      if (!rows.length) return;
+      root.append(section(phaseTitle(ph), rows));
+    });
+    if (fixed.length) root.append(section('Fixed calendar dates', fixed, null, null,
+      'These were written as real dates, so they stay put whatever the release date turns out to be.'));
+    if (undated.length) root.append(section('No offset yet', undated, null, null,
+      'Open one and give it a T-number — it then slots into a phase above.'));
+    if (!all.length) root.append(empty('Nothing in the bank yet',
+      'Open a platform tab and use the Templates button — drafted posts arrive already placed at their T-offset.'));
+  }
+
+  const asT = (n) => (n === 0 ? 'T' : n > 0 ? `T+${n}` : `T${n}`);
 
   const byPlatform = (a, b) =>
     PLATFORMS.indexOf(a.p) - PLATFORMS.indexOf(b.p) || (a.type.label || '').localeCompare(b.type.label || '');
@@ -168,7 +233,15 @@ export function renderQueue(sub) {
       onClick: (e) => { e.stopPropagation(); fn(); },
     }, label);
 
-    return h('div', {
+    const markPosted = () => {
+      item.status = 'posted';
+      item.postedAt = today;
+      if (!item.when) item.when = today;
+      S.touch(slice); draw();
+      toast('Marked posted');
+    };
+
+    const el = h('div', {
       class: 'item',
       style: { borderLeft: `3px solid ${PCOLORS[p.key] || 'var(--fg-3)'}`, opacity: posted ? .6 : 1 },
       onClick: open,
@@ -185,7 +258,7 @@ export function renderQueue(sub) {
 
       h('div', { class: 'item-meta' },
         iso ? h('span', { text: `${fmtDate(iso)}${set.releaseDate ? ' · ' + tLabel(iso, set.releaseDate) : ''} · ${relativeDay(iso)}` })
-            : h('span', { text: 'no date' }),
+            : h('span', { text: item.when ? String(item.when) : 'no date' }),
         item.media?.length ? h('span', { text: `${item.media.length} attachment${item.media.length > 1 ? 's' : ''}` }) : null,
         type.limit ? h('span', { style: over ? { color: 'var(--bad)' } : {},
           text: `${(item.body || '').length}/${type.limit}` }) : null,
@@ -194,16 +267,26 @@ export function renderQueue(sub) {
       h('div', { class: 'row', style: { marginTop: '9px', gap: '6px' } },
         item.body ? act('Copy text', () => copy(item.body)) : null,
         posted
-          ? act('Un-post', () => { item.status = 'ready'; delete item.postedAt; S.touch(slice); draw(); })
-          : act('Mark posted', () => {
-              item.status = 'posted';
-              // the day you actually posted it, which is not always the day
-              // it was scheduled for — the weekly review counts by this
-              item.postedAt = today;
-              if (!item.when) item.when = today;
+          ? act('Recycle', () => {
+              /* a post that worked is the cheapest content you own —
+                 copy it forward rather than writing a new one */
+              const arr = S.get(slice).content[type.key];
+              arr.push({
+                ...JSON.parse(JSON.stringify(item)),
+                id: uid(), status: 'draft',
+                when: shiftWhen(item.when || today, 30),
+                postedAt: '', posted_variant: '',
+                title: `${item.title || 'Untitled'} (again)`,
+              });
               S.touch(slice); draw();
-              toast('Marked posted');
-            }, 'btn-primary'),
+              toast('Copied forward 30 days as a draft');
+            })
+          : null,
+        posted
+          ? act('Un-post', () => { item.status = 'ready'; delete item.postedAt; S.touch(slice); draw(); })
+          /* the day you actually posted it, which is not always the day
+             it was scheduled for — the weekly review counts by this */
+          : act('Mark posted', markPosted, 'btn-primary'),
         !posted && item.when ? act('Snooze a day', () => {
           item.when = shiftWhen(item.when, 1); S.touch(slice); draw();
         }) : null,
@@ -214,6 +297,17 @@ export function renderQueue(sub) {
         h('div', { style: { flex: 1 } }),
         h('a', { class: 'btn btn-sm btn-ghost', href: `#/p/${p.key}/${type.key}`,
           onClick: (e) => e.stopPropagation() }, p.name)));
+
+    /* the two things you do fifty times a week, without aiming at a button */
+    if (!posted) {
+      swipeRow(el, {
+        right: { label: 'Posted', color: 'var(--ok)', fn: markPosted },
+        left: item.when
+          ? { label: 'Snooze a day', color: 'var(--warn)', fn: () => { item.when = shiftWhen(item.when, 1); S.touch(slice); draw(); } }
+          : { label: 'Today', color: 'var(--warn)', fn: () => { item.when = today; S.touch(slice); draw(); } },
+      });
+    }
+    return el;
   }
 
   draw();

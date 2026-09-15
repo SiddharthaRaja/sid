@@ -6,16 +6,24 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v7';
+const VERSION = 'sid-v15';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
   './js/app.js', './js/store.js', './js/backend.js', './js/ui.js', './js/icons.js',
   './js/charts.js', './js/agenda.js', './js/firebase-config.js',
+  './js/phases.js', './js/theme.js', './js/mobile.js', './js/marks.js', './js/capture.js', './js/paste.js', './js/drive.js', './js/push.js', './js/lint.js', './js/assist.js', './js/imagetools.js',
   './js/data/platforms.js', './js/data/info.js', './js/data/masterplan.js',
   './js/data/radio.js', './js/data/rights.js', './js/data/finance.js', './js/data/video.js',
   './js/data/templates.js', './js/data/contacts.js', './js/data/ads.js', './js/data/assets.js',
   './js/modules/dashboard.js', './js/modules/calendar.js', './js/modules/plan.js',
+  './js/modules/release.js', './js/modules/timeline.js',
+  './js/modules/compose.js', './js/modules/write.js', './js/modules/seo.js', './js/modules/health.js',
+  './js/data/phrasebank.js', './js/data/hashtags.js', './js/data/seo.js',
+  './js/data/specs.js', './js/data/unlocks.js', './js/data/merch.js', './js/data/website.js',
+  './js/data/maillist.js', './js/data/playlists.js', './js/data/runsheet.js',
+  './js/modules/maillist.js', './js/modules/playlists.js', './js/modules/runsheet.js',
+  './js/modules/studio.js', './js/modules/sprofile.js', './js/modules/merch.js', './js/modules/site.js',
   './js/modules/platform.js', './js/modules/shared.js', './js/modules/stats.js',
   './js/modules/radio.js', './js/modules/rights.js', './js/modules/finance.js',
   './js/modules/video.js', './js/modules/notes.js', './js/modules/settings.js',
@@ -39,6 +47,49 @@ self.addEventListener('activate', (e) => {
     .then(() => self.clients.claim()));
 });
 
+
+/* ------------------------------------------------------------
+   push notifications
+
+   The payload is written by the GitHub Action, which only ever
+   forwards what the app itself planned. Everything is defensive:
+   a malformed payload still shows something rather than nothing,
+   because a push event that shows no notification is a permission
+   strike against the site in Chrome.
+   ------------------------------------------------------------ */
+
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text ? e.data.text() : '' }; }
+
+  const title = d.title || 'Sid';
+  const opts = {
+    body: d.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: d.tag || d.kind || 'sid',
+    renotify: false,
+    data: { url: d.url || './index.html#/today' },
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './index.html#/today';
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      /* already open somewhere — go to the right page rather than
+         opening a second copy of the app */
+      if ('focus' in c) {
+        try { await c.navigate(new URL(url, self.location.origin).href); } catch {}
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  })());
+});
 
 /* ------------------------------------------------------------
    share target

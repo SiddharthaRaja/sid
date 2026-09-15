@@ -73,6 +73,22 @@ export function lineChart(series, opts = {}) {
   const svg = sv('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none',
     style: 'width:100%;height:' + H + 'px' });
 
+  /* A date between two readings still has a place on the axis —
+     interpolate it, so an annotation lands where it happened rather
+     than snapping to the nearest time you happened to log a number. */
+  const day = (iso) => new Date(iso + 'T00:00:00').getTime();
+  const Xd = (iso) => {
+    if (xs.includes(iso)) return X(iso);
+    const t = day(iso);
+    if (!isFinite(t)) return null;
+    if (t <= day(xs[0]) || t >= day(xs[xs.length - 1])) return null;   // outside the chart
+    let i = 0;
+    while (i < xs.length - 1 && day(xs[i + 1]) < t) i++;
+    const a = day(xs[i]), b = day(xs[i + 1]);
+    const f = b === a ? 0 : (t - a) / (b - a);
+    return X(xs[i]) + (X(xs[i + 1]) - X(xs[i])) * f;
+  };
+
   // gridlines + y labels
   const span = max - min;
   const tick = (v) => span >= 20 ? fmtNum(Math.round(v))
@@ -104,6 +120,16 @@ export function lineChart(series, opts = {}) {
       { 'text-anchor': 'end', fill: 'var(--fg-2)', 'font-size': 10 }));
   });
 
+  /* annotations: what you did, drawn under what happened */
+  const marks = (opts.marks || []).map(m => ({ ...m, px: Xd(m.x) })).filter(m => m.px !== null);
+  marks.forEach(m => {
+    svg.append(sv('line', {
+      class: 'mark-line', x1: m.px, x2: m.px, y1: P.t, y2: H - P.b,
+      stroke: m.color || 'var(--fg-3)',
+    }));
+    svg.append(sv('circle', { class: 'mark-dot', cx: m.px, cy: P.t, r: 3.2, fill: m.color || 'var(--fg-3)' }));
+  });
+
   const wrap = h('div', { class: 'chart-wrap' }, svg);
 
   // hover crosshair + tooltip
@@ -125,9 +151,17 @@ export function lineChart(series, opts = {}) {
     tip.innerHTML = `<div class="tk">${esc(best)}</div>` + live.map((s, i) => {
       const p = s.points.find(p => p.x === best);
       return p ? `<div class="tr"><i style="background:${seriesColor(i)}"></i><span>${esc(s.name)}</span><span class="tv">${fmtNum(p.y)}</span></div>` : '';
-    }).join('');
+    }).join('') + nearMarks(vx).map(m =>
+      `<div class="tr tm"><i style="background:${m.color || 'var(--fg-3)'}"></i><span>${esc(m.label)}</span></div>`).join('');
   });
   svg.addEventListener('pointerleave', () => { cross.style.display = 'none'; tip.style.display = 'none'; });
+
+  /* only annotations genuinely under the pointer — a loose radius
+     makes the chart claim Tuesday's spike was caused by Sunday */
+  function nearMarks(vx) {
+    return marks.filter(m => Math.abs(m.px - vx) < 7)
+      .flatMap(m => (m.items || [m]));
+  }
 
   const out = h('div', {}, wrap);
   if (live.length >= 2) out.append(legend(live.map((s, i) => [s.name, seriesColor(i)])));
