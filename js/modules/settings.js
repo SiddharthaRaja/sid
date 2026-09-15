@@ -352,10 +352,10 @@ export function renderSettings(sub) {
             : h('p', { class: 'small muted', style: { margin: 0 } },
                 'Add your Firebase config to js/firebase-config.js to turn on Google sign-in, cross-device sync and cloud backup.'))),
 
-      card(cardHead('Reminders on your phone'),
+      card(cardHead('Your dates in a real calendar'),
         h('p', { class: 'small muted' },
-          'Sid cannot send push notifications on its own — that needs a server running around the clock, which this app deliberately does not have. ' +
-          'Exporting your dates to a real calendar gets you the same thing for nothing: lock-screen reminders that work offline and keep working whether or not you open Sid.'),
+          'Push notifications live under Notifications — this is the other half. An export puts every date into Google Calendar or whatever you use, ' +
+          'where it sits alongside the rest of your week, works offline, and keeps working whether or not you open Sid.'),
         btn('Send dates to my calendar', calendarExportModal, { cls: 'btn-sm btn-primary' })),
 
       card(cardHead('Install Sid'),
