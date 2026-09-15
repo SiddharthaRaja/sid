@@ -50,18 +50,46 @@ export function localToday(offsetMinutes, nowMs = Date.now()) {
   return new Date(nowMs + (offsetMinutes || 0) * 60_000).toISOString().slice(0, 10);
 }
 
+/** The hour on the user's own clock, as a float so 02:20 reads as 2.33. */
+export function localHour(offsetMinutes, nowMs = Date.now()) {
+  const d = new Date(nowMs + (offsetMinutes || 0) * 60_000);
+  return d.getUTCHours() + d.getUTCMinutes() / 60;
+}
+
+/* The four slots, kept in step with js/push.js. The workflow fires a
+   little before each one and GitHub's scheduler is late by 5–30
+   minutes, so a run claims the slot it is nearest to rather than
+   trusting the clock to be exact. */
+export const SLOT_HOURS = { morning: 10, midday: 15, evening: 22, late: 2 };
+
+/** Which slot this run is. Null if it woke up nowhere near one. */
+export function currentSlot(hour, window = 3) {
+  let best = null, bestGap = Infinity;
+  for (const [key, h] of Object.entries(SLOT_HOURS)) {
+    const raw = Math.abs(hour - h);
+    const gap = Math.min(raw, 24 - raw);            // 23:40 is near 02:00
+    if (gap < bestGap) { bestGap = gap; best = key; }
+  }
+  return bestGap <= window ? best : null;
+}
+
 /**
- * What to send this user right now: everything planned for their
- * today, at most one per kind. A morning digest and a release-day
- * alert are different things; three morning digests are a reason
- * to turn notifications off.
+ * What to send this user right now: this slot's items, dated today,
+ * at most one per kind. Four copies of the same list is how a person
+ * learns to swipe notifications away without reading them.
  */
 export function pickDue(P, nowMs = Date.now()) {
   if (!P || !P.sub || !P.sub.endpoint) return [];
-  const today = localToday(P.tzOffset ?? 330, nowMs);
+  const tz = P.tzOffset ?? 330;
+  const today = localToday(tz, nowMs);
+  const slot = currentSlot(localHour(tz, nowMs));
+  if (!slot) return [];
+
   const seen = new Set();
   return (P.schedule || [])
     .filter(x => x && x.date === today)
+    /* items written before slots existed are treated as the 10am one */
+    .filter(x => (x.slot || 'morning') === slot)
     .filter(x => { const k = x.kind || 'sid'; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
@@ -81,10 +109,13 @@ async function run() {
     const P = snap.data()?.v || {};
     if (!P.sub || !P.sub.endpoint) { skipped++; continue; }
 
-    const today = localToday(P.tzOffset ?? 330);
+    const tz = P.tzOffset ?? 330;
+    const today = localToday(tz);
+    const slot = currentSlot(localHour(tz)) || 'none';
     const due = pickDue(P);
 
-    if (!due.length) { console.log(`${u.id}: nothing due on ${today}`); continue; }
+    if (!due.length) { console.log(`${u.id}: nothing due on ${today} at the ${slot} slot`); continue; }
+    console.log(`${u.id}: ${today}, ${slot} slot, ${due.length} to send`);
 
     for (const item of due) {
       const payload = JSON.stringify({
@@ -92,7 +123,7 @@ async function run() {
         body: item.body || '',
         url: item.url || './index.html#/today',
         kind: item.kind || 'sid',
-        tag: `${item.kind}-${item.date}`,
+        tag: `${item.slot || 'morning'}-${item.kind}-${item.date}`,
       });
 
       if (DRY_RUN) { console.log('DRY RUN →', payload); sent++; continue; }

@@ -38,10 +38,12 @@ import { renderReview }    from './modules/review.js';
 import { renderHistory }   from './modules/history.js';
 import { renderMeta }      from './modules/meta.js';
 import { renderInbox, drainShares, inboxCount } from './modules/inbox.js';
+import { renderNotepad }  from './modules/notepad.js';
+import { renderSvara, leaveSvara } from './modules/svara.js';
 import { calendarExportModal } from './modules/calexport.js';
 import * as R from './reader.js';
 import { applyTheme, cycleTheme, watchSystemTheme, themeMode } from './theme.js';
-import { initMobile, clearSwipeTabs } from './mobile.js';
+import { initMobile, setSwipeSections } from './mobile.js';
 import { initCapture } from './capture.js';
 import { initPaste } from './paste.js';
 import * as PUSH from './push.js';
@@ -94,11 +96,15 @@ S.register('merch',    () => ({ costs: null, vendors: [], preorders: [], price: 
 S.register('site',     () => ({ scenes: null, eggs: null, notes: '' }));
 S.register('write',    () => ({ phrases: [], swipe: [], batch: null }));
 S.register('seo',      () => ({ sets: null, keywords: [], yt: { title: '', desc: '', tags: '' } }));
+/* The two guest apps. They keep their own slices and share nothing
+   with the release side — see the header of each module. */
+S.register('notepad',  () => ({ songs: [], open: null }));
+S.register('svara',    () => ({ tonicMidi: 50, raga: 'mayamalavagowla', droneVol: 0.22, current: null, speed: 1, bpm: null, click: true, log: [] }));
 S.register('epk',      () => ({ photos: [], quotes: [], downloads: [], links: [], tagline: '', videoUrl: '', embedUrl: '', showFacts: true }));
 PLATFORMS.forEach(p => S.register(`p_${p.key}`, emptyPlatform));
 
 const ALL_SLICES = [
-  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch', 'write', 'seo', 'studio', 'sprofile', 'merch', 'site', 'maillist', 'playlists', 'runsheet', 'push',
+  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch', 'write', 'seo', 'studio', 'sprofile', 'merch', 'site', 'maillist', 'playlists', 'runsheet', 'push', 'notepad', 'svara',
   ...PLATFORMS.map(p => `p_${p.key}`),
 ];
 
@@ -195,6 +201,10 @@ const ROUTES = {
   inbox:     { title: 'Inbox',              icon: 'queue',      render: renderInbox },
   notes:     { title: 'Notes',              icon: 'notes',      render: renderNotes },
   settings:  { title: 'Settings',           icon: 'settings',   render: renderSettings },
+
+  /* the two guest apps, deliberately last and deliberately separate */
+  np:        { title: 'Notepad',            icon: 'notepad',    render: renderNotepad,  guest: true },
+  sv:        { title: 'Svara',              icon: 'svara',      render: renderSvara,    guest: true },
 };
 
 function parseHash() {
@@ -313,18 +323,33 @@ function buildNav() {
   }
   section('More', MORE.map(([label, hash, ico, color]) => navItem(label, hash, ico, color)));
 
-  // mobile bottom bar — four destinations plus everything else
+  /* Their own section, not folded into More: they are separate apps
+     that happen to live in the same shell, not more release tools. */
+  box.append(navSection('Apps'));
+  if (!navCollapsed()['Apps']) {
+    box.append(navItem('Notepad', '#/np', 'notepad'), navItem('Svara', '#/sv', 'svara'));
+  }
+
+  // mobile bottom bar — the sections you swipe between, plus More
   const tb = clear($('#tabbar'));
-  [['#/today', 'Today', 'dashboard'],
-   ['#/calendar', 'Calendar', 'calendar'],
-   ['#/release', 'Release', 'settings'],
-   ['#/p/instagram', 'Platforms', 'instagram']].forEach(([hash, label, ico]) => {
+  BOTTOM.forEach(([hash, label, ico]) => {
     tb.append(h('button', { 'data-hash': hash, onClick: () => go(hash) },
       h('span', { html: icon(ico) }), h('span', { text: label })));
   });
   tb.append(h('button', { 'data-hash': '#more', onClick: moreSheet },
     h('span', { html: icon('more') }), h('span', { text: 'More' })));
 }
+
+/* The phone's top-level sections: the bottom bar, and what a
+   sideways flick moves between. Order is the swipe order. */
+export const BOTTOM = [
+  ['#/today', 'Today', 'dashboard'],
+  ['#/calendar', 'Calendar', 'calendar'],
+  ['#/release', 'Release', 'settings'],
+  ['#/p/instagram', 'Platforms', 'instagram'],
+  ['#/np', 'Notepad', 'notepad'],
+  ['#/sv', 'Svara', 'svara'],
+];
 
 /* Everything not on the bottom bar, one tap away. */
 function moreSheet() {
@@ -341,6 +366,10 @@ function moreSheet() {
       link('Master plan', '#/plan', 'masterplan'),
       link('Contacts', '#/contacts', 'contacts'),
       MORE.map(([label, hash, ico, color]) => link(label, hash, ico, color))),
+    h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Apps'),
+    h('div', { class: 'grid g3' },
+      link('Notepad', '#/np', 'notepad'),
+      link('Svara', '#/sv', 'svara')),
     h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Platforms'),
     h('div', { class: 'grid g3' },
       PLATFORMS.map(p => link(p.name, `#/p/${p.key}`, p.icon, PCOLORS[p.key]))));
@@ -368,11 +397,18 @@ export function rerender() {
   rerenderTimer = setTimeout(route, 0);
 }
 
+let lastKey = null;
+
 function route() {
   const r = parseHash();
   const view = clear($('#view'));
   window.scrollTo(0, 0);
-  clearSwipeTabs();          // the new page re-registers if it has subtabs
+
+  /* Svara holds the microphone and an oscillator. Leaving the section
+     has to release both, or the phone shows a recording indicator for
+     a page you are no longer looking at. */
+  if (lastKey === 'sv' && !(r.kind === 'route' && r.key === 'sv')) leaveSvara();
+  lastKey = r.kind === 'route' ? r.key : `p/${r.key}`;
 
   try {
     if (r.kind === 'platform') {
@@ -606,6 +642,7 @@ function shortcutSheet() {
 applyTheme();
 watchSystemTheme();
 initMobile(S.pendingCount);
+setSwipeSections(BOTTOM);          // a flick past the last subtab moves section
 initCapture();
 initPaste();
 start();

@@ -19,8 +19,13 @@ name: Daily notifications
 
 on:
   schedule:
-    # 02:37 UTC = 08:07 IST. Off the hour on purpose.
-    - cron: '37 2 * * *'
+    # Four a day, in IST (UTC+5:30). Each run works out from the clock
+    # which slot it is and sends only that slot's items, so a late run
+    # still lands in the right one.
+    - cron: '33 4 * * *'     # 10:03 IST — the day's list
+    - cron: '33 9 * * *'     # 15:03 IST — the one thing left
+    - cron: '33 16 * * *'    # 22:03 IST — tomorrow
+    - cron: '33 20 * * *'    # 02:03 IST — only if something is late
   workflow_dispatch:
     inputs:
       dry_run:

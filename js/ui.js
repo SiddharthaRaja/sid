@@ -178,8 +178,9 @@ export const empty = (title, sub) =>
   h('div', { class: 'empty' }, h('strong', { text: title }), sub || '');
 
 export function subtabs(items, active, onPick) {
-  /* a horizontal flick on the page moves between these */
-  import('./mobile.js').then(m => m.setSwipeTabs({ items, active, onPick })).catch(() => {});
+  /* Tap only. A flick across the page moves between whole sections —
+     see mobile.js — and a second meaning for the same gesture inside
+     a page made both of them unpredictable. */
   return h('div', { class: 'subtabs' },
     items.map(([k, label]) =>
       h('button', { class: `subtab ${k === active ? 'on' : ''}`, onClick: () => onPick(k) }, label)));

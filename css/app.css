@@ -399,8 +399,13 @@ table.tbl tr:hover td{background:var(--bg-3)}
     background:color-mix(in srgb,var(--bg-2) 94%,transparent);backdrop-filter:blur(14px);
     border-top:1px solid var(--line);padding:5px 4px calc(5px + env(safe-area-inset-bottom));
   }
+  /* seven destinations do not fit at phone width, so the bar scrolls
+     sideways — with the scrollbar hidden and the items wide enough to
+     stay tappable rather than squeezed to nothing */
+  .tabbar{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .tabbar::-webkit-scrollbar{display:none}
   .tabbar button{
-    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;
+    flex:0 0 auto;min-width:19vw;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;
     border:none;background:transparent;color:var(--fg-3);font-size:9.5px;cursor:pointer;border-radius:var(--r);
   }
   .tabbar button.on{color:var(--accent)}
@@ -807,3 +812,78 @@ body.kb-open .offline-strip{display:none}
 .linkrow .inp{flex:1;min-width:150px}
 .kbd{font:500 11px/1 var(--mono);background:var(--bg-inset);border:1px solid var(--line);
   border-radius:5px;padding:5px 7px;color:var(--fg-2);white-space:nowrap;flex:none}
+
+/* ============================================================
+   Notepad and Svara
+
+   Both are guests in this stylesheet: everything here is prefixed
+   so nothing can leak into the release side of the app.
+   ============================================================ */
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips .chip{font-size:12.5px;padding:5px 11px}
+.card.clickable{cursor:pointer;transition:border-color .12s}
+.card.clickable:hover{border-color:var(--accent-line)}
+
+/* ---- the lyric editor with its syllable gutter ---- */
+.np-edit{display:flex;gap:8px;align-items:flex-start;margin-top:10px}
+.syl-gutter{
+  flex:0 0 26px;text-align:right;font:500 11px/1 var(--mono);color:var(--fg-3);
+  overflow:hidden;user-select:none;padding-right:2px;
+}
+.sg-line{white-space:nowrap}
+textarea.np-area{flex:1;line-height:1.6;min-height:200px}
+.np-full{
+  white-space:pre-wrap;font:400 13.5px/1.7 inherit;color:var(--fg);
+  background:var(--bg-inset);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;margin:10px 0 0;max-height:none;overflow:visible;
+}
+
+/* ---- metronome ---- */
+.metro-visual{
+  width:84px;height:84px;margin:4px auto 16px;border-radius:20px;
+  background:var(--bg-inset);border:2px solid var(--line);
+  display:flex;align-items:center;justify-content:center;transition:filter .04s,border-color .04s;
+}
+.metro-visual svg{width:34px;height:34px;color:var(--fg-2)}
+.metro-visual.beat{border-color:var(--accent);filter:brightness(1.5)}
+.metro-bpm{font:600 30px/1 var(--mono);color:var(--fg);min-width:84px}
+.metro-slider{width:100%;margin-top:14px;accent-color:var(--accent)}
+.btn.metro-beat{border-color:var(--accent)}
+.btn.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--fg)}
+
+/* ---- Svara ---- */
+.sv-meter{
+  position:relative;height:120px;border-radius:var(--r);overflow:hidden;
+  background:var(--bg-inset);border:1px solid var(--line);
+}
+.sv-meter canvas{display:block;width:100%;height:100%}
+.sv-note{
+  display:flex;align-items:baseline;gap:10px;justify-content:center;
+  margin:10px 0 2px;
+}
+.sv-note b{font:600 40px/1 var(--mono);color:var(--fg)}
+.sv-note span{font:500 13px/1 var(--mono);color:var(--fg-3)}
+.sv-cents{
+  height:8px;border-radius:99px;background:var(--bg-3);border:1px solid var(--line);
+  position:relative;margin:8px 0 2px;
+}
+.sv-cents i{
+  position:absolute;top:-3px;width:10px;height:12px;border-radius:3px;background:var(--accent);
+  transform:translateX(-50%);transition:left .07s linear;
+}
+.sv-cents em{position:absolute;left:50%;top:-4px;width:1px;height:14px;background:var(--fg-3);opacity:.6}
+.sv-in-tune i{background:var(--ok)}
+.sv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:6px;margin-top:8px}
+.sv-sw{
+  border:1px solid var(--line);background:var(--bg-3);border-radius:var(--r);
+  padding:9px 4px;font:500 13px/1 var(--mono);color:var(--fg-2);cursor:pointer;text-align:center;
+}
+.sv-sw.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--fg)}
+.sv-steps{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.sv-step{
+  padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg-3);
+  font:500 13px/1 var(--mono);color:var(--fg-3);
+}
+.sv-step.on{background:var(--accent-soft);border-color:var(--accent);color:var(--fg)}
+.sv-step.hit{border-color:var(--ok);color:var(--ok)}

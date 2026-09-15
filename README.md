@@ -532,3 +532,156 @@ any open sheet.
 
 Every item editor has **Duplicate** — a deep copy, marked draft, named "(copy)".
 Faster than retyping a caption you want three variants of.
+
+## Notifications: four a day
+
+Each of the four has its own job, because the same list four times is how
+you learn to swipe notifications away without reading them. Any of them stays
+silent when it has nothing to say.
+
+| Time | What it says |
+|---|---|
+| 10am | everything due today — posts, tasks, anything overdue |
+| 3pm | the single most important thing left today, and nothing otherwise |
+| 10pm | tomorrow, while there is still time to write it tonight |
+| 2am | only when something is genuinely overdue, or it is release day |
+
+The workflow wakes four times (`33 4`, `33 9`, `33 16`, `33 20` UTC) and each
+run works out from your own clock which slot it is, so a run that GitHub
+delivers twenty minutes late still lands in the right one. Per-slot switches
+are in **Settings → Notifications**.
+
+## Notepad
+
+A section of its own, at `#/np`. The standalone Notepad app moved in whole:
+songs, sections with draft/working/done, the syllable count in the gutter, the
+full-text view, rhymes, synonyms, and a metronome that keeps running when you
+navigate away.
+
+What changed in the move:
+
+- Songs live in the `notepad` slice, so they sync across devices, land in
+  snapshots and back up with everything else instead of sitting in one
+  browser's localStorage.
+- Its Google sign-in is gone — Sid's is the only one now.
+- Its eleven themes are gone; it uses Sid's theme and accent.
+- `vendor/notepad/rhymes.js` (3 MB) and `synonyms.js` (7 MB) are **not** in the
+  service-worker shell. They load on the first search and the runtime cache
+  keeps them for offline use after that. Precaching 10 MB on every cold start
+  for a feature most sessions never open would be a bad trade.
+
+## Svara
+
+At `#/sv` — the part of the Android app that a browser can do honestly:
+
+- **Tuner** — mic pitch against the swaras of the raga, with a scrolling graph
+  and a cents readout. Normalised autocorrelation, parabolic interpolation, a
+  one-euro filter so a held note reads as a line.
+- **Practice** — a run-along for any exercise: the notation lights up akshara by
+  akshara with a click, and each swara is scored from the samples inside its
+  own window, skipping the first third so an attack is not marked as a miss.
+- **Library** — Sarali Varisai 1–14, eight Janta sets and the seven Alankarams,
+  ported from the Kotlin content files. Notation strings read as they do on
+  paper so they can be checked against a teacher's copy by eye.
+- **Log** — days, minutes, streak, written automatically when a run finishes.
+
+What it deliberately does not do: record, score a take, or replace the app.
+Recording stays on Android. Leaving the section releases the microphone and
+stops the drone.
+
+## The phone's swipe
+
+A flick across the page moves between the bottom-bar sections, the way
+Instagram moves between its tabs:
+
+    Today → Calendar → Release → Platforms → Notepad → Svara
+
+The bar scrolls sideways now that there are six of them plus More. Subtabs are
+taps — an earlier version swiped those instead, which meant ten flicks through
+Instagram's tabs to reach Notepad.
+
+## Svara, second pass
+
+The browser section now carries most of the Android app.
+
+### The library
+
+77 exercises. The Carnatic side follows the syllabus order rather than the
+alphabet, because the fourteen sections are a progression and reordering them
+to suit navigation breaks the pedagogy:
+
+| Group | Count |
+|---|---|
+| Shruti | 3 |
+| Sarali Varisai | 14 |
+| Janta Varisai | 8 |
+| Dhatu Varisai | 2 |
+| Mel / Sthayi Varisai | 3 |
+| Alankaram | 7 |
+| Geetham | 5 |
+| Nottuswaram | 3 |
+| Technique (SOVT, breath, chest, head, mix, range, agility, cool-down) | 32 |
+
+Plus six routines, the eight vocal-health sections with their caveats intact,
+and the fifteen syllabus sections — including the ones that are reading rather
+than a drill, so the progression stays visible.
+
+The five geethams and three nottuswarams that ship without notation are study
+cards: raga, tala, sahitya and tips, with the drone and monitor available.
+Inventing their notation would teach you the app's guess instead of the piece.
+
+`js/data/svara-mechanical.js`, `-tips.js` and `-library.js` were converted from
+the Kotlin by a script rather than retyped — 850 lines of step timings and
+prose is exactly the kind of copying that puts a typo in one place and nowhere
+else. The data is identical to the Android app's.
+
+### One timeline for both kinds
+
+A mechanical exercise is steps in seconds; a Carnatic one is aksharas at a
+tempo. `js/svara/timeline.js` compiles both into the same segment list, which
+is why one player, one graph and one scorer serve both. The graph draws the
+target line and your voice on the same axis, so a miss is visible rather than
+merely scored.
+
+### The reference voice
+
+`js/svara/voice-worklet.js` sings the exercise for you to imitate: four formant
+resonators driven by a band-limited glottal pulse, with aspiration noise,
+pitch micro-jitter, portamento, and vibrato that fades in on held notes.
+Synthesised rather than recorded so it transposes exactly to any Sa — a
+recorded singer would need pitch-shifting and would arrive detuned in an app
+whose whole claim is pitch accuracy.
+
+It is synthetic and always will be. A voice that passes as human needs a neural
+singing model: hundreds of megabytes of weights, no real-time path on a phone,
+and no pretrained Carnatic voice in existence.
+
+### Pitch off the main thread
+
+`js/svara/pitch-worklet.js` runs the detector on the audio thread, so a busy
+render cannot stall it — which on a phone used to mean the line stuttered
+exactly when the UI was working hardest. The old analyser path is still there
+as a fallback for browsers without AudioWorklet.
+
+### Takes
+
+Recording works. What does not work is syncing it: a three-minute take is tens
+of megabytes, two orders of magnitude past what belongs in Firestore next to
+your text. So takes live in IndexedDB **on the device that made them** — not in
+snapshots, not on your laptop, and gone if you clear site data. The app says so
+on the tab rather than letting you find out.
+
+The Android design is kept exactly: the master is 32-bit float WAV and is never
+rewritten, and effects are a recipe re-applied at export. That is what makes
+"back to the original" free and what makes it impossible to destroy a take by
+fiddling. The chain is high-pass, five-band EQ, compressor, echo and reverb,
+rendered offline through Web Audio.
+
+Deliberately not `MediaRecorder`: it gives compressed Opus, and a pitch app
+should not hand you a lossy master.
+
+### Still Android only
+
+- **Latency** — 60–150 ms in a browser however it is written. Use it for pitch,
+  not for judging your timing against the click.
+- **Background audio** — Android suspends it when you switch apps.

@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v15';
+const VERSION = 'sid-v17';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
@@ -28,6 +28,13 @@ const SHELL = [
   './js/modules/radio.js', './js/modules/rights.js', './js/modules/finance.js',
   './js/modules/video.js', './js/modules/notes.js', './js/modules/settings.js',
   './js/modules/copy.js', './js/modules/contacts.js',
+  /* the two guest apps. Their dictionaries (vendor/notepad/*.js, 10 MB
+     between them) are deliberately NOT here — they load on first use
+     and the runtime cache keeps them after that. */
+  './js/modules/notepad.js', './js/notepad/data.js', './js/notepad/metronome.js',
+  './js/modules/svara.js', './js/svara/audio.js', './js/svara/timeline.js', './js/svara/record.js',
+  './js/svara/pitch-worklet.js', './js/svara/voice-worklet.js',
+  './js/data/svara.js', './js/data/svara-mechanical.js', './js/data/svara-tips.js', './js/data/svara-library.js',
   './js/modules/queue.js', './js/modules/ads.js', './js/modules/epk.js',
   './js/modules/assets.js', './js/modules/review.js',
   './js/reader.js', './js/modules/history.js', './js/ics.js',

@@ -205,6 +205,19 @@ export function renderSettings(sub) {
 
     if (on) {
       P.kinds = P.kinds || { ...PUSH.DEFAULT_KINDS };
+      P.slots = P.slots || { ...PUSH.DEFAULT_SLOTS };
+
+      box.append(card(
+        cardHead('When'),
+        h('p', { class: 'small muted' },
+          'Four a day, each with a different job — the same list four times is how you learn to swipe them away without reading. Any of them stays silent when it has nothing to say.'),
+        h('div', { class: 'list' }, PUSH.SLOTS.map(s => h('div', { class: 'item' },
+          h('div', { class: 'item-head' },
+            h('input', { type: 'checkbox', checked: P.slots[s.key] !== false, style: { accentColor: 'var(--accent)' },
+              onChange: (e) => { P.slots[s.key] = e.target.checked; S.touch('push'); PUSH.rebuild(); } }),
+            h('span', { class: 'tag mono', text: s.label }),
+            h('span', { class: 'item-title', text: s.note })))))));
+
       box.append(card(
         cardHead('What to send', btn('Rebuild the plan', () => {
           const n = PUSH.rebuild();
@@ -230,9 +243,10 @@ export function renderSettings(sub) {
           ? h('div', { style: { marginTop: '12px' } },
               h('div', { class: 'small muted', text: 'Next few:' }),
               h('div', { class: 'list', style: { marginTop: '6px' } },
-                P.schedule.slice(0, 5).map(x => h('div', { class: 'item' },
+                P.schedule.slice(0, 6).map(x => h('div', { class: 'item' },
                   h('div', { class: 'item-head' },
-                    h('span', { class: 'tag mono', text: fmtDate(x.date) }),
+                    h('span', { class: 'tag mono',
+                      text: `${fmtDate(x.date)} ${(PUSH.SLOTS.find(s => s.key === (x.slot || 'morning')) || {}).label || ''}` }),
                     h('span', { class: 'item-title', text: x.title })),
                   h('div', { class: 'small muted', text: x.body })))))
           : null));
@@ -247,7 +261,7 @@ export function renderSettings(sub) {
         h('li', { text: 'FIREBASE_SERVICE_ACCOUNT — Firebase console → Project settings → Service accounts → Generate new private key. Paste the whole JSON file as the secret value.' }),
         h('li', { text: 'Then Actions → Daily notifications → Run workflow, with "dry run" ticked, to see what it would send without sending it.' })),
       h('p', { class: 'small muted' },
-        'It runs at 02:37 UTC, which is about 08:07 in the morning here. GitHub\'s scheduler is best-effort and often runs 5–30 minutes late, so treat it as "some time after eight" rather than an alarm. Scheduled workflows also switch themselves off after roughly 60 days without a commit to the repo — pushing anything wakes them up.')));
+        'The job wakes four times a day — a little before 10am, 3pm, 10pm and 2am — and each run works out from the clock which of the four it is. GitHub\'s scheduler is best-effort and often runs 5–30 minutes late, so treat each one as "some time after" rather than an alarm. Scheduled workflows also switch themselves off after roughly 60 days without a commit to the repo — pushing anything wakes them up.')));
 
     return box;
   }

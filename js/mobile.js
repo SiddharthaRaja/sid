@@ -133,14 +133,40 @@ function initHints() {
 }
 
 /* ---------------------------------------------------------- */
-/*  swipe between subtabs                                      */
+/*  swipe between sections                                     */
 /* ---------------------------------------------------------- */
 
-let tabSwipe = null;
+/**
+ * The way Instagram works: a flick across the page moves to the next
+ * section on the bottom bar. Today → Calendar → Release → Platforms →
+ * Notepad → Svara, and back.
+ *
+ * The first version of this moved between subtabs instead, and it was
+ * wrong: a platform page has eight of them, so getting from Today to
+ * Notepad meant ten flicks through tabs you did not want. Subtabs are
+ * taps now — the strip is already on screen and already scrolls.
+ */
+let sections = null;          // [[hash, label, icon], ...] — set by app.js
 
-/** Called by ui.subtabs() on every render; cleared by the router. */
-export function setSwipeTabs(cfg) { tabSwipe = cfg; }
-export function clearSwipeTabs() { tabSwipe = null; }
+/** The phone's top-level sections, in swipe order. */
+export function setSwipeSections(list) { sections = list; }
+
+function sectionIndex() {
+  if (!sections) return -1;
+  const hash = location.hash || '#/today';
+  const base = hash.startsWith('#/p/') ? '#/p/' : hash;
+  return sections.findIndex(([h2]) =>
+    h2 === hash || (base === '#/p/' && h2.startsWith('#/p/')) || hash.startsWith(h2 + '/'));
+}
+
+function moveSection(dir) {
+  const i = sectionIndex();
+  if (i < 0) return false;
+  const next = i + dir;
+  if (next < 0 || next >= sections.length) return false;
+  location.hash = sections[next][0];
+  return true;
+}
 
 function initTabSwipe() {
   const view = document.getElementById('view');
@@ -148,27 +174,29 @@ function initTabSwipe() {
   let x0 = 0, y0 = 0, t0 = 0, live = false;
 
   view.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1 || !tabSwipe) { live = false; return; }
-    /* not while you are dragging inside something that scrolls sideways */
-    if (e.target.closest('.table-wrap, .subtabs, .shots, .phase-bars, .media-grid, input, textarea, select')) { live = false; return; }
+    if (e.touches.length !== 1) { live = false; return; }
+    if (!sections) { live = false; return; }
+    /* not while you are dragging inside something that scrolls sideways,
+       and not while a sheet is open over the page */
+    const mr = document.getElementById('modal-root');
+    if (mr && !mr.hidden) { live = false; return; }
+    if (e.target.closest('.table-wrap, .subtabs, .shots, .phase-bars, .media-grid, .sv-steps, .chips, .sv-grid, input, textarea, select, canvas')) { live = false; return; }
     const t = e.touches[0];
     x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); live = true;
   }, { passive: true });
 
   view.addEventListener('touchend', (e) => {
-    if (!live || !tabSwipe) return;
+    if (!live) return;
     live = false;
     const t = e.changedTouches[0];
     const dx = t.clientX - x0, dy = t.clientY - y0;
     if (Date.now() - t0 > 600) return;                 // a drag, not a flick
     if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
-    const { items, active, onPick } = tabSwipe;
-    const i = items.findIndex(x => x[0] === active);
-    const next = dx < 0 ? i + 1 : i - 1;
-    if (i < 0 || next < 0 || next >= items.length) return;
-    onPick(items[next][0]);
-    flash(dx < 0 ? 'left' : 'right');
+
+    const dir = dx < 0 ? 1 : -1;
+    if (moveSection(dir)) flash(dir > 0 ? 'left' : 'right');
   }, { passive: true });
+
 }
 
 function flash(dir) {

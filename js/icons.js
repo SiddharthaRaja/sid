@@ -21,6 +21,12 @@ export const ICONS = {
   stats: S('<path d="M4 20V10M9.3 20V4M14.7 20v-7M20 20V7"/>'),
   notes: S('<path d="M5.5 3h13a1 1 0 0 1 1 1v16.2a.6.6 0 0 1-.94.5L12 16.6l-6.56 4.1a.6.6 0 0 1-.94-.5V4a1 1 0 0 1 1-1z"/>'),
   info: S('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.4"/><circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/>'),
+  /* a page with a pen — the songwriting pad, distinct from Notes */
+  notepad: S('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M8 8h5M8 12h4"/><path d="M18.4 11.6a1.9 1.9 0 0 1 2.7 2.7L16 19.4l-3 .8.8-3z"/>'),
+  /* a tuning fork — Svara */
+  svara: S('<path d="M8.4 3v6.2a3.6 3.6 0 0 0 7.2 0V3"/><path d="M12 12.8V21"/><path d="M9.6 21h4.8"/>'),
+  /* a metronome */
+  metronome: S('<path d="M6 20.4L10 3.6h4l4 16.8z"/><path d="M5 20.4h14"/><path d="M12 5.2v10.4"/>'),
   settings: S('<circle cx="12" cy="12" r="3.1"/><path d="M12 2.6v2.7M12 18.7v2.7M21.4 12h-2.7M5.3 12H2.6M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9M18.6 18.6l-1.9-1.9M7.3 7.3L5.4 5.4"/>'),
   search: S('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
   plus: S('<path d="M12 5v14M5 12h14"/>'),
