@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v17';
+const VERSION = 'sid-v19';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
@@ -41,7 +41,7 @@ const SHELL = [
   './js/modules/calexport.js', './js/modules/meta.js', './js/modules/inbox.js',
   './js/modules/links.js', './js/modules/pitch.js', './js/data/meta.js', './js/data/pitch.js',
   './js/data/history/a1.js', './js/data/history/a2.js', './js/data/history/a3.js', './js/data/history/a4.js', './js/data/history/a5.js', './js/data/history/a6.js', './js/data/history/g1.js', './js/data/history/g2.js', './js/data/history/g3.js', './js/data/history/g4.js', './js/data/history/g5.js', './js/data/history/g6.js', './js/data/history/g7.js', './js/data/history/index.js',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg',
+  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png', './icons/icon.svg',
 ];
 
 self.addEventListener('install', (e) => {
