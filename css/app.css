@@ -887,3 +887,13 @@ textarea.np-area{flex:1;line-height:1.6;min-height:200px}
 }
 .sv-step.on{background:var(--accent-soft);border-color:var(--accent);color:var(--fg)}
 .sv-step.hit{border-color:var(--ok);color:var(--ok)}
+
+/* ---- the playbooks: fenced blocks are captions you copy ---- */
+.pb-block{position:relative;margin:10px 0}
+pre.pb-code{
+  white-space:pre-wrap;word-break:break-word;margin:0;
+  font:400 13px/1.6 var(--sans);color:var(--fg);
+  background:var(--bg-inset);border:1px solid var(--line);border-left:2px solid var(--accent-line);
+  border-radius:var(--r);padding:12px 12px 12px 14px;
+}
+.pb-copy{display:flex;justify-content:flex-end;margin-top:4px}

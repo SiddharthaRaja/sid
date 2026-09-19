@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v19';
+const VERSION = 'sid-v20';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
@@ -32,6 +32,9 @@ const SHELL = [
      between them) are deliberately NOT here — they load on first use
      and the runtime cache keeps them after that. */
   './js/modules/notepad.js', './js/notepad/data.js', './js/notepad/metronome.js',
+  /* the playbook index only — the ten documents in docs/social/ are
+     280 KB and load the first time you open one */
+  './js/modules/playbook.js', './js/data/playbooks.js',
   './js/modules/svara.js', './js/svara/audio.js', './js/svara/timeline.js', './js/svara/record.js',
   './js/svara/pitch-worklet.js', './js/svara/voice-worklet.js',
   './js/data/svara.js', './js/data/svara-mechanical.js', './js/data/svara-tips.js', './js/data/svara-library.js',

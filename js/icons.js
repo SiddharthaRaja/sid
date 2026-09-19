@@ -23,6 +23,8 @@ export const ICONS = {
   info: S('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.4"/><circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/>'),
   /* a page with a pen — the songwriting pad, distinct from Notes */
   notepad: S('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M8 8h5M8 12h4"/><path d="M18.4 11.6a1.9 1.9 0 0 1 2.7 2.7L16 19.4l-3 .8.8-3z"/>'),
+  /* an open book — the platform playbooks */
+  book: S('<path d="M3.2 5.2c2.9-.9 5.7-.9 8.8.6 3.1-1.5 5.9-1.5 8.8-.6v12.9c-2.9-.9-5.7-.9-8.8.6-3.1-1.5-5.9-1.5-8.8-.6z"/><path d="M12 5.8v12.9"/>'),
   /* a tuning fork — Svara */
   svara: S('<path d="M8.4 3v6.2a3.6 3.6 0 0 0 7.2 0V3"/><path d="M12 12.8V21"/><path d="M9.6 21h4.8"/>'),
   /* a metronome */

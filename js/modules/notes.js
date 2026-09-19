@@ -25,6 +25,7 @@ export function renderNotes() {
       h('div', { class: 'page-actions' },
         h('input', { class: 'inp', style: { maxWidth: '200px' }, placeholder: 'Search…', value: q,
           onInput: e => { q = e.target.value; drawList(); } }),
+        h('a', { class: 'btn btn-sm', href: '#/book', text: 'Playbooks' }),
         btn('New note', () => open(null), { cls: 'btn-primary btn-sm', icon: 'plus' }))));
 
     const listBox = h('div');

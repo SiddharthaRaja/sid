@@ -40,6 +40,7 @@ import { renderMeta }      from './modules/meta.js';
 import { renderInbox, drainShares, inboxCount } from './modules/inbox.js';
 import { renderNotepad }  from './modules/notepad.js';
 import { renderSvara, leaveSvara } from './modules/svara.js';
+import { renderPlaybook } from './modules/playbook.js';
 import { calendarExportModal } from './modules/calexport.js';
 import * as R from './reader.js';
 import { applyTheme, cycleTheme, watchSystemTheme, themeMode } from './theme.js';
@@ -99,12 +100,14 @@ S.register('seo',      () => ({ sets: null, keywords: [], yt: { title: '', desc:
 /* The two guest apps. They keep their own slices and share nothing
    with the release side — see the header of each module. */
 S.register('notepad',  () => ({ songs: [], open: null }));
+/* the ten platform documents: only what you have read and pinned */
+S.register('book',     () => ({ open: null, sec: {}, read: {}, pinned: {} }));
 S.register('svara',    () => ({ tonicMidi: 50, raga: 'mayamalavagowla', droneVol: 0.22, current: null, speed: 1, bpm: null, click: true, log: [] }));
 S.register('epk',      () => ({ photos: [], quotes: [], downloads: [], links: [], tagline: '', videoUrl: '', embedUrl: '', showFacts: true }));
 PLATFORMS.forEach(p => S.register(`p_${p.key}`, emptyPlatform));
 
 const ALL_SLICES = [
-  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch', 'write', 'seo', 'studio', 'sprofile', 'merch', 'site', 'maillist', 'playlists', 'runsheet', 'push', 'notepad', 'svara',
+  'settings', 'calendar', 'plan', 'radio', 'rights', 'finance', 'video', 'stats', 'notes', 'copy', 'contacts', 'ads', 'epk', 'assets', 'review', 'history', 'meta', 'inbox', 'links', 'pitch', 'write', 'seo', 'studio', 'sprofile', 'merch', 'site', 'maillist', 'playlists', 'runsheet', 'push', 'notepad', 'svara', 'book',
   ...PLATFORMS.map(p => `p_${p.key}`),
 ];
 
@@ -200,6 +203,7 @@ const ROUTES = {
   meta:      { title: 'Metadata',           icon: 'rights',     render: renderMeta },
   inbox:     { title: 'Inbox',              icon: 'queue',      render: renderInbox },
   notes:     { title: 'Notes',              icon: 'notes',      render: renderNotes },
+  book:      { title: 'Playbooks',          icon: 'book',       render: renderPlaybook },
   settings:  { title: 'Settings',           icon: 'settings',   render: renderSettings },
 
   /* the two guest apps, deliberately last and deliberately separate */
@@ -272,6 +276,7 @@ const MORE = [
   ['Metadata', '#/meta', 'rights'],
   ['Rights & licensing', '#/rights', 'rights'],
   ['Finance', '#/finance', 'finance'],
+  ['Playbooks', '#/book', 'book'],
   ['Notes', '#/notes', 'notes'],
   ['History', '#/history', 'history'],
   ['Settings', '#/settings', 'settings'],
