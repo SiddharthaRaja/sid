@@ -22,6 +22,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/journal-and-file-backup.mjs
     node tools/tests/restructure.mjs
     node tools/tests/ui-pass18.mjs
+    node tools/tests/diary-fill.mjs
 
 ## What each one holds the line on
 
@@ -102,6 +103,17 @@ prev/next pagers; More can be starred, starring does not open the
 thing, the choice survives a reload and un-stars again; the capture
 button clears the bottom bar on every screen; the page is pure black
 with surfaces still distinguishable from it.
+
+**diary-fill.mjs** — run against a faithful copy of the real data (31
+entries on X, T-30 to T+1). Slots are laid out to 100 on all three
+text platforms; the 31 written entries keep their text, dates and
+order and are never tagged as generated; new slots carry the number on
+their own first line; the dates continue the run by the MEDIAN gap, so
+one skipped day cannot compound (the mean put entry 100 two days late);
+all three platforms share X's dates; it never runs twice and creates no
+duplicates; a snapshot is taken first; undo removes only slots still
+holding nothing but their number; and with no diary on X to extend,
+nothing is invented anywhere.
 
 ## The layers, in order of what they survive
 

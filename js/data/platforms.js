@@ -131,6 +131,10 @@ export const PLATFORMS = [
     key: 'bluesky', name: 'Bluesky', group: 'Text', icon: 'bluesky',
     types: [
       post('post', 'Posts', 300, ''),
+      /* The diary runs on all three text platforms, in each one's own
+         voice — so it needs a home here too, not a hundred entries
+         mixed into ordinary posts. */
+      post('diary', 'Diary', 300, 'The same numbered entries as X and Threads, rewritten for here — never copy-pasted across.'),
     ],
     metrics: ['Followers', 'Likes', 'Reposts'],
     setup: ['Claim the handle', 'Mirror the strongest X and Threads posts', 'Low priority, low effort'],

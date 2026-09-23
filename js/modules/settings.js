@@ -8,6 +8,7 @@ import * as B from '../backend.js';
 import * as L from '../local.js';
 import * as J from '../journal.js';
 import * as F from '../filebackup.js';
+import * as DIARY from '../diary.js';
 import { calendarExportModal } from './calexport.js';
 import {
   h, clear, btn, card, cardHead, empty, field, modal, subtabs, selectField, toast,
@@ -352,6 +353,7 @@ export function renderSettings(sub) {
         }, { cls: 'btn-sm btn-primary' }),
         btn('Import a backup', importBackup, { cls: 'btn-sm' }))));
 
+    box.append(diaryCard());
     box.append(fileBackupCard());
     box.append(journalCard());
     box.append(takesCard());
@@ -461,6 +463,46 @@ export function renderSettings(sub) {
       h('p', { class: 'small muted' }, 'Everything is still saved on this device, and nothing already in the cloud has been damaged. Download a backup before you use Sid on another device.'),
       h('div', { class: 'list' }, (st.stuck || []).map(id => h('div', { class: 'item' },
         h('div', { class: 'item-head' }, h('span', { class: 'item-title mono', text: id }))))));
+  }
+
+  /* The hundred diary slots: what exists, and a way back out. */
+  function diaryCard() {
+    const plan = DIARY.preview();
+    const box = h('div');
+
+    if (!plan.ok) {
+      return card(cardHead('The diary'),
+        h('p', { class: 'small muted', text: plan.reason }));
+    }
+
+    box.append(h('div', { class: 'list' }, plan.rows.map(r => h('div', { class: 'item' },
+      h('div', { class: 'item-head' },
+        h('span', { class: 'item-title', text: r.label }),
+        h('span', { class: 'tag', text: `${r.has} of ${DIARY.DIARY_TARGET}` }),
+        r.missing
+          ? h('span', { class: 'small muted', text: `${r.missing} slots missing (${r.from}–${r.to})` })
+          : h('span', { class: 'tag ok', text: 'complete' }))))));
+
+    return card(
+      cardHead('The diary',
+        plan.total
+          ? btn(`Lay out the missing ${plan.total}`, () => {
+              const r = DIARY.fill();
+              toast(r.added ? `${r.added} slots added` : 'Nothing to add', 4000);
+              draw();
+            }, { cls: 'btn-sm btn-primary' })
+          : null),
+      h('p', { class: 'small muted' },
+        `Numbered slots waiting for each entry, on all three text platforms, dated from the run already written on X — entry ${DIARY.DIARY_TARGET} lands on ${plan.endWhen}. Writing one is opening it and typing.`),
+      box,
+      h('div', { class: 'row', style: { marginTop: '12px' } },
+        btn('Undo the empty ones', () => confirmDelete('every diary slot that has not been written in', () => {
+          const n = DIARY.undo();
+          toast(n ? `${n} empty slots removed` : 'Nothing to remove — they have all been written in', 4000);
+          draw();
+        }), { cls: 'btn-sm btn-ghost btn-danger' })),
+      h('p', { class: 'small muted', style: { marginTop: '8px' } },
+        'Undo only removes slots still holding nothing but their number. Anything you have typed into stays, whatever else happens.'));
   }
 
   /* A real file on the computer, rewritten in the background. The only

@@ -6,11 +6,11 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v25';
+const VERSION = 'sid-v26';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/app.js', './js/store.js', './js/backend.js', './js/local.js', './js/journal.js', './js/filebackup.js', './js/ui.js', './js/icons.js',
+  './js/app.js', './js/store.js', './js/backend.js', './js/local.js', './js/diary.js', './js/journal.js', './js/filebackup.js', './js/ui.js', './js/icons.js',
   './js/charts.js', './js/agenda.js', './js/firebase-config.js',
   './js/phases.js', './js/theme.js', './js/mobile.js', './js/marks.js', './js/capture.js', './js/paste.js', './js/drive.js', './js/push.js', './js/lint.js', './js/assist.js', './js/imagetools.js',
   './js/data/platforms.js', './js/data/info.js', './js/data/masterplan.js',

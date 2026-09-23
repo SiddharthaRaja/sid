@@ -6,6 +6,7 @@ import * as B from './backend.js';
 import * as S from './store.js';
 import { $, $$, h, clear, toast, modal, download } from './ui.js';
 import * as L from './local.js';
+import * as DIARY from './diary.js';
 import { icon, PCOLORS } from './icons.js';
 import { PLATFORMS, PLATFORM_GROUPS, platformsIn } from './data/platforms.js';
 
@@ -157,6 +158,31 @@ async function removeInventedSeeds() {
   S.touch('settings');
   if (n) console.info(`removed ${n} invented seed items; a snapshot was taken first`);
   return n;
+}
+
+/* Lay out the rest of the hundred diary slots, once.
+
+   Unlike removeInventedSeeds this only ADDS, and only where nothing
+   exists — it cannot touch an entry that has been written. It also
+   derives every date from the entries already on X rather than from a
+   cadence I picked, so the run continues exactly as it started. */
+async function fillDiarySlots() {
+  const set = S.get('settings');
+  if (set.diaryFilled) return null;
+
+  const plan = DIARY.preview();
+  if (!plan.ok || !plan.total) { set.diaryFilled = true; S.touch('settings'); return null; }
+
+  const before = S.everything();
+  try { await L.writeSnapshot(before, 'pre-diary-fill'); }
+  catch (e) { console.warn('diary fill deferred — no snapshot', e); return null; }
+  try { const J = await import('./journal.js'); await J.recordAll(before, 'pre-diary-fill'); } catch {}
+
+  const r = DIARY.fill();
+  if (!r.ok) return null;
+  set.diaryFilled = true;
+  S.touch('settings');
+  return { ...r, endWhen: plan.endWhen };
 }
 
 /* Fill the reference-heavy modules on first run. */
@@ -619,6 +645,7 @@ async function start() {
     }
     await removeInventedSeeds();
     seedDefaults();
+    const diary = await fillDiarySlots();
 
     /* anything shared into Sid from another app while it was closed */
     try {
@@ -665,6 +692,11 @@ async function start() {
     // a snapshot every time you open the app
     S.snapshotNow('session-open').catch(e => console.warn('session snapshot', e));
     paintHealth();
+
+    if (diary && diary.added) {
+      toast(`${diary.added} diary slots added — numbered to ${DIARY.DIARY_TARGET}, ending ${diary.endWhen}. `
+        + `Settings → Backup can undo it.`, 8000);
+    }
 
     /* Is this page already out of date? */
     checkForUpdate();
