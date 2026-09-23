@@ -24,6 +24,11 @@
   --shadow-lg:0 8px 40px rgba(20,18,14,.14);
 
   --ok:#2f7d5a; --warn:#b07d1e; --bad:#b0402f; --info:#39628f;
+  /* Aliases the JS uses by name. They had inline fallbacks, which
+     worked but ignored the theme — a hard-coded red in light mode. */
+  --danger:var(--bad);
+  --warn-bg:#fdf3dd; --warn-fg:#6b4d0e;
+  --bad-bg:#fbe7e3;  --bad-fg:#8d2f21;
 
   --r:9px; --r-lg:13px;
   --nav-w:224px;
@@ -34,12 +39,18 @@
 }
 
 [data-theme="dark"]{
-  --bg:#0e0f12;
-  --bg-2:#16181d;
-  --bg-3:#1c1f25;
-  --bg-inset:#101216;
+  /* The page is true black — on an OLED phone those pixels are off,
+     which is the point. Everything that sits ON the page is lifted
+     just enough to read as a surface: cards a shade above black,
+     wells a shade below them, and borders bright enough to survive
+     the extra contrast. Making every layer black too would flatten
+     the whole app into one sheet. */
+  --bg:#000000;
+  --bg-2:#101216;
+  --bg-3:#191c22;
+  --bg-inset:#08090b;
   --line:#272b33;
-  --line-soft:#1f232a;
+  --line-soft:#1b1e24;
   --fg:#e9e7e3;
   --fg-2:#a5a49f;
   --fg-3:#6f7178;
@@ -48,6 +59,9 @@
   --accent-soft:rgb(var(--accent-rgb) / .18);
   --accent-line:rgb(var(--accent-rgb) / .42);
   --ok:#63b98d; --warn:#dcb45f; --bad:#e4796a; --info:#7fa8d8;
+  --danger:var(--bad);
+  --warn-bg:#2a1f0c; --warn-fg:#f0cf8d;
+  --bad-bg:#2c1210;  --bad-fg:#f0a79a;
   color-scheme:dark;
 }
 
@@ -404,6 +418,7 @@ table.tbl tr:hover td{background:var(--bg-3)}
      stay tappable rather than squeezed to nothing */
   .tabbar{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .tabbar::-webkit-scrollbar{display:none}
+
   .tabbar button{
     flex:0 0 auto;min-width:19vw;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;
     border:none;background:transparent;color:var(--fg-3);font-size:9.5px;cursor:pointer;border-radius:var(--r);
@@ -911,19 +926,19 @@ pre.pb-code{
 .health{
   display:flex; align-items:center; gap:10px;
   padding:10px 14px; margin:0;
-  background:var(--warn-bg,#3a2a12); color:var(--warn-fg,#ffd9a0);
-  border-bottom:1px solid rgba(255,255,255,.12);
+  background:var(--warn-bg); color:var(--warn-fg);
+  border-bottom:1px solid var(--line);
   font-size:13px; line-height:1.4;
 }
-.health[data-level="bad"]{ background:#4a1d1d; color:#ffc9c9; }
+.health[data-level="bad"]{ background:var(--bad-bg); color:var(--bad-fg); }
 .health-text{ flex:1; min-width:0; }
 .health-act{
   flex:none; cursor:pointer; white-space:nowrap;
-  background:rgba(255,255,255,.14); color:inherit;
-  border:1px solid rgba(255,255,255,.22); border-radius:7px;
+  background:color-mix(in srgb, currentColor 14%, transparent); color:inherit;
+  border:1px solid color-mix(in srgb, currentColor 34%, transparent); border-radius:7px;
   padding:5px 10px; font-size:12px; font-weight:500;
 }
-.health-act:hover{ background:rgba(255,255,255,.22); }
+.health-act:hover{ background:color-mix(in srgb, currentColor 24%, transparent); }
 .health-x{
   flex:none; cursor:pointer; background:none; border:0; color:inherit;
   font-size:20px; line-height:1; padding:0 4px; opacity:.7;
@@ -932,9 +947,9 @@ pre.pb-code{
 
 /* a destructive button waiting for its second tap */
 .btn-danger[data-armed]{
-  background:var(--danger,#d33) !important;
+  background:var(--danger) !important;
   color:#fff !important;
-  border-color:var(--danger,#d33) !important;
+  border-color:var(--danger) !important;
 }
 
 /* ---------- category tiles ----------
@@ -949,7 +964,7 @@ pre.pb-code{
 .tile{
   position:relative; display:flex; flex-direction:column; gap:6px;
   min-height:104px; padding:16px 14px;
-  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  background:var(--bg-2); border:1px solid var(--line); border-radius:14px;
   color:inherit; text-decoration:none;
   transition:transform .12s, border-color .12s, background .12s;
 }
@@ -976,3 +991,14 @@ pre.pb-code{
   background:transparent;
 }
 .chip.ghost{ opacity:.8; }
+
+/* ---------- quick capture, above the bottom bar ----------
+   The button sits 16px off the bottom with z-index 37, and the phone's
+   tab bar is fixed to the bottom at z-index 38 — so on a phone the
+   button was half-hidden behind it. This has to come last in the file:
+   an earlier rule at the same specificity loses to the plain .fab
+   block further down. */
+@media (max-width: 900px){
+  .fab{ bottom:calc(68px + env(safe-area-inset-bottom)); z-index:39; }
+  body.is-offline .fab{ bottom:calc(102px + env(safe-area-inset-bottom)); }
+}

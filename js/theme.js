@@ -44,7 +44,7 @@ export function applyTheme() {
   root.dataset.theme = t;
   root.dataset.accent = accent();
   document.querySelector('meta[name=theme-color]')
-    ?.setAttribute('content', t === 'dark' ? '#0e0f12' : '#f7f6f4');
+    ?.setAttribute('content', t === 'dark' ? '#000000' : '#f7f6f4');
   // the nav button shows the glyph for what you would switch to
   $$('.ico-moon').forEach(e => e.style.display = t === 'dark' ? '' : 'none');
   $$('.ico-sun').forEach(e => e.style.display = t === 'dark' ? 'none' : '');

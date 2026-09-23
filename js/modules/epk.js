@@ -160,7 +160,7 @@ export function renderEpk(sub) {
     const box = h('div');
     const html = buildHtml({ preview: true });
     const frame = h('iframe', {
-      style: { width: '100%', height: '76vh', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', background: '#0e0f12' },
+      style: { width: '100%', height: '76vh', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', background: '#000000' },
       srcdoc: html,
     });
     box.append(h('p', { class: 'small muted' }, 'Exactly what gets exported. Scroll inside it.'));
@@ -223,7 +223,7 @@ export function renderEpk(sub) {
 ${photos[0] ? `<meta property="og:image" content="${esc(photos[0].url)}">` : ''}
 <style>
 :root{
-  --accent:#e0603a; --bg:#0e0f12; --bg-2:#16181d; --line:#272b33;
+  --accent:#e0603a; --bg:#000000; --bg-2:#101216; --line:#272b33;
   --fg:#e9e7e3; --fg-2:#a5a49f; --fg-3:#6f7178;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;

@@ -666,6 +666,10 @@ async function start() {
     S.snapshotNow('session-open').catch(e => console.warn('session snapshot', e));
     paintHealth();
 
+    /* Is this page already out of date? */
+    checkForUpdate();
+    setInterval(checkForUpdate, 10 * 60 * 1000);
+
     /* Refresh the notification plan. The sender only ever forwards
        what was planned here, so opening the app is what keeps the
        notifications alive — said plainly in Settings. */
@@ -703,6 +707,42 @@ export function exportBackup() {
 let healthDismissed = '';
 let accountChanged = null;
 
+/* What the banner's button does. Usually "download a backup"; when a
+   new build is waiting it becomes "reload", because that is the
+   thing that actually fixes what the banner is complaining about. */
+let healthAction = { label: 'Download a backup', run: () => { if (exportBackup()) { toast('Backup downloaded'); paintHealth(); } } };
+
+/* Is this page running an older build than the server has?
+
+   The service worker serves app files network-first, but the browser's
+   own HTTP cache sits underneath that and GitHub Pages marks them
+   cacheable for ten minutes — so a deploy could land and the app would
+   go on running the previous one with nothing to show for it. The
+   fetch below is cache-busted on purpose; if the versions differ, say
+   so and offer the reload. */
+async function checkForUpdate() {
+  try {
+    const r = await fetch('./sw.js?cb=' + Date.now(), { cache: 'no-store' });
+    const server = ((await r.text()).match(/VERSION\s*=\s*'([^']+)'/) || [])[1];
+    if (!server) return;
+
+    const sw = navigator.serviceWorker?.controller;
+    if (!sw) return;
+    const running = await new Promise((res) => {
+      const ch = new MessageChannel();
+      const t = setTimeout(() => res(null), 2000);
+      ch.port1.onmessage = (e) => { clearTimeout(t); res(e.data?.version || null); };
+      try { sw.postMessage({ type: 'version' }, [ch.port2]); } catch { clearTimeout(t); res(null); }
+    });
+    if (!running || running === server) return;
+
+    updateWaiting = { running, server };
+    try { (await navigator.serviceWorker.getRegistration())?.update(); } catch {}
+    paintHealth();
+  } catch { /* offline — nothing to say */ }
+}
+let updateWaiting = null;
+
 function paintHealth() {
   const bar = $('#health');
   if (!bar) return;
@@ -717,7 +757,21 @@ function paintHealth() {
   const other = accounts.find(a => a.ns !== L.namespace() && a.sections >= 3);
 
   let level = '', text = '';
-  if (accountChanged) {
+  healthAction = { label: 'Download a backup', run: () => { if (exportBackup()) { toast('Backup downloaded'); paintHealth(); } } };
+
+  if (updateWaiting) {
+    level = 'warn';
+    text = `A newer version of Sid is ready (${updateWaiting.server}, you are running ${updateWaiting.running}). Reload to use it.`;
+    healthAction = { label: 'Reload', run: async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        await reg?.update();
+        for (const k of await caches.keys()) if (k !== 'sid-share') await caches.delete(k);
+      } catch {}
+      location.reload();
+    } };
+  }
+  else if (accountChanged) {
     level = 'bad';
     text = `You are signed in as ${accountChanged.to.email || 'a different account'}. `
       + `Last time Sid was opened on this device it was ${accountChanged.from.email || 'another account'}. `
@@ -746,6 +800,7 @@ function paintHealth() {
   bar.hidden = false;
   bar.dataset.level = level;
   $('#health-text').textContent = text;
+  $('#health-act').textContent = healthAction.label;
 }
 
 /* Exposed on purpose. When something goes wrong with your data I need
@@ -757,7 +812,7 @@ window.addEventListener('sid-health', paintHealth);
 window.addEventListener('sid-storage-problem', paintHealth);
 setInterval(paintHealth, 60000);
 
-$('#health-act')?.addEventListener('click', () => { if (exportBackup()) { toast('Backup downloaded'); paintHealth(); } });
+$('#health-act')?.addEventListener('click', () => healthAction.run());
 $('#health-x')?.addEventListener('click', () => { healthDismissed = $('#health-text').textContent; paintHealth(); });
 
 window.addEventListener('hashchange', route);

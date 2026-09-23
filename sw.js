@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v23';
+const VERSION = 'sid-v24';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
@@ -159,6 +159,15 @@ self.addEventListener('notificationclick', (e) => {
 
 const SHARE_CACHE = 'sid-share';
 
+/* The page asks which build is actually serving it. Without this,
+   "is my deploy live?" has no answer you can see from inside the
+   app — which is how a stale worker goes unnoticed. */
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'version') {
+    e.source?.postMessage({ type: 'version', version: VERSION });
+  }
+});
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'POST') return;
@@ -197,8 +206,25 @@ self.addEventListener('fetch', (e) => {
   if (/(googleapis|gstatic|firebaseio|firebaseapp|google\.com)/.test(url.hostname)) return;
   if (url.origin !== location.origin) return;
 
+  /* Bypass the BROWSER's HTTP cache for the app's own files.
+
+     GitHub Pages serves them with max-age=600, and a plain fetch()
+     here is allowed to answer from that cache — so for ten minutes
+     after a deploy the "network-first" strategy could still hand back
+     the previous build, with nothing to show that it had. That is
+     exactly what "I pushed but nothing changed" looks like.
+
+     The big unchanging files (the 10 MB rhyme and synonym
+     dictionaries, the playbook documents) are left on the normal
+     cache rules, because re-validating those on every load is the
+     cost this is meant to avoid. */
+  const appFile = /\.(html|js|css|webmanifest)$/.test(url.pathname) && !CARRY_OVER.test(url.pathname);
+  const req = appFile
+    ? new Request(e.request, { cache: 'reload' })
+    : e.request;
+
   e.respondWith(
-    fetch(e.request)
+    fetch(req)
       .then(res => {
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});

@@ -313,7 +313,7 @@ export function renderSettings(sub) {
       const el = box.querySelector('#snap-list');
       if (!el) return;
       clear(el);
-      errors.forEach(msg => el.append(h('div', { class: 'small', style: { color: 'var(--danger,#f66)' },
+      errors.forEach(msg => el.append(h('div', { class: 'small', style: { color: 'var(--danger)' },
         text: 'Could not read snapshots — ' + msg })));
       if (!rows.length) {
         el.append(h('div', { class: 'small muted',
@@ -330,7 +330,7 @@ export function renderSettings(sub) {
           btn('Download', () => downloadSnapshot(s), { cls: 'btn-sm btn-ghost' }))))));
     }).catch(e => {
       const el = box.querySelector('#snap-list');
-      if (el) { clear(el); el.append(h('div', { class: 'small', style: { color: 'var(--danger,#f66)' }, text: String(e.message || e) })); }
+      if (el) { clear(el); el.append(h('div', { class: 'small', style: { color: 'var(--danger)' }, text: String(e.message || e) })); }
     });
 
     const since = L.daysSinceExport();
@@ -338,7 +338,7 @@ export function renderSettings(sub) {
       cardHead('Export & import'),
       h('p', { class: 'small muted' }, 'A JSON file on your own computer is the only copy that no outage, no account mix-up and no bug of mine can reach. Keep one.'),
       h('p', { class: 'small muted' }, 'It holds every section of the app. It does NOT hold your Svara recordings — audio is far too large for a JSON file, so those have their own button below.'),
-      h('p', { class: 'small', style: { color: since > 7 ? 'var(--danger,#f66)' : 'inherit' },
+      h('p', { class: 'small', style: { color: since > 7 ? 'var(--danger)' : 'inherit' },
         text: L.lastExport()
           ? `Last download: ${new Date(L.lastExport()).toLocaleString()} (${Math.floor(since)} day${Math.floor(since) === 1 ? '' : 's'} ago).`
           : 'You have never downloaded one.' }),
@@ -440,7 +440,7 @@ export function renderSettings(sub) {
           ? `${takes.length} recording${takes.length > 1 ? 's' : ''} here · about ${mb(u.used)} MB used of ${mb(u.quota)} MB the browser allows.`
           : 'No recordings on this device yet.';
         if (u.quota && u.used / u.quota > 0.8) {
-          out.style.color = 'var(--danger,#f66)';
+          out.style.color = 'var(--danger)';
           out.textContent += ' Storage is nearly full — download them and delete some.';
         }
       } catch (e) { out.textContent = 'Could not read the recording store: ' + (e.message || e); }
@@ -457,7 +457,7 @@ export function renderSettings(sub) {
     return card(
       cardHead('Some sections are not reaching the cloud',
         btn('Try again', () => { const n = S.retryStuck(); toast(n ? `Retrying ${n} section${n > 1 ? 's' : ''}` : 'Nothing to retry'); draw(); }, { cls: 'btn-sm btn-primary' })),
-      h('p', { class: 'small', style: { color: 'var(--danger,#f66)' }, text: st.detail }),
+      h('p', { class: 'small', style: { color: 'var(--danger)' }, text: st.detail }),
       h('p', { class: 'small muted' }, 'Everything is still saved on this device, and nothing already in the cloud has been damaged. Download a backup before you use Sid on another device.'),
       h('div', { class: 'list' }, (st.stuck || []).map(id => h('div', { class: 'item' },
         h('div', { class: 'item-head' }, h('span', { class: 'item-title mono', text: id }))))));
@@ -474,7 +474,7 @@ export function renderSettings(sub) {
       line.textContent = now.error ? now.error
         : now.connected ? `Connected — writing to "${now.name}"${now.lastWrite ? `, last at ${new Date(now.lastWrite).toLocaleTimeString()}` : ' (first write on the next snapshot)'}.`
         : 'Not connected.';
-      line.style.color = now.error ? 'var(--danger,#f66)' : now.connected ? 'var(--ok)' : 'var(--fg-3)';
+      line.style.color = now.error ? 'var(--danger)' : now.connected ? 'var(--ok)' : 'var(--fg-3)';
     };
 
     if (!st.supported) {
@@ -553,7 +553,7 @@ export function renderSettings(sub) {
           : st.entries
             ? `${st.entries} entries across ${st.sections} sections, ${(st.bytes / 1048576).toFixed(1)} MB, from ${new Date(st.oldest).toLocaleString()} to ${new Date(st.newest).toLocaleString()}.`
             : 'Nothing logged yet — it starts with your next edit.';
-        if (st.error) { out.textContent += ' Last error: ' + st.error; out.style.color = 'var(--danger,#f66)'; }
+        if (st.error) { out.textContent += ' Last error: ' + st.error; out.style.color = 'var(--danger)'; }
       } catch (e) { out.textContent = 'Could not read the history: ' + (e.message || e); }
     };
 
@@ -636,6 +636,34 @@ export function renderSettings(sub) {
     })();
   }
 
+/* Ask the service worker what it is, and the server what it has. */
+  async function runningBuild() {
+    const out = { running: 'unknown', server: 'unknown', stale: false };
+    try {
+      const sw = navigator.serviceWorker?.controller;
+      if (sw) {
+        out.running = await new Promise((res) => {
+          const ch = new MessageChannel();
+          const t = setTimeout(() => res('no answer'), 1500);
+          ch.port1.onmessage = (e) => { clearTimeout(t); res(e.data?.version || 'no answer'); };
+          sw.postMessage({ type: 'version' }, [ch.port2]);
+        });
+      } else {
+        out.running = 'no service worker';
+      }
+    } catch (e) { out.running = 'error: ' + (e.message || e); }
+
+    try {
+      const r = await fetch('./sw.js?cb=' + Date.now(), { cache: 'no-store' });
+      const t = await r.text();
+      out.server = (t.match(/VERSION\s*=\s*'([^']+)'/) || [])[1] || 'unreadable';
+    } catch (e) { out.server = 'offline'; }
+
+    out.stale = out.running !== out.server
+      && /^sid-v/.test(out.running) && /^sid-v/.test(out.server);
+    return out;
+  }
+
   function downloadSnapshot(s) {
     (s.where === 'cloud' ? B.readSnapshot(s.at) : L.readSnapshot(s.key || s.at))
       .then(data => {
@@ -659,9 +687,18 @@ export function renderSettings(sub) {
       const d = S.diagnose();
       const est = await L.estimate();
       const u = B.user();
+
+      /* Which build is actually serving this page, and which one is
+         on the server. A mismatch is the whole explanation for
+         "I pushed and nothing changed". */
+      const build = await runningBuild();
+
       let snapCount = '?';
       try { snapCount = (await L.listSnapshots()).length; } catch (e) { snapCount = 'error: ' + e.message; }
       pre.textContent = JSON.stringify({
+        buildRunning: build.running,
+        buildOnServer: build.server,
+        buildStale: build.stale,
         account: u?.email || '(none)',
         uid: u?.uid || '(none)',
         mode: B.MODE,
@@ -717,7 +754,7 @@ export function renderSettings(sub) {
           title: 'Import this backup?',
           body: h('div', {},
             h('p', { class: 'small' }, `${chk.known.length} recognised sections will replace what is in the app now.`),
-            chk.empty.length ? h('p', { class: 'small', style: { color: 'var(--danger,#f66)' } },
+            chk.empty.length ? h('p', { class: 'small', style: { color: 'var(--danger)' } },
               `${chk.empty.length} of them are EMPTY in this file (${chk.empty.join(', ')}) — importing will empty them here too.`) : null,
             chk.bad.length ? h('p', { class: 'small muted' }, `${chk.bad.length} malformed sections will be skipped.`) : null,
             chk.unknown.length ? h('p', { class: 'small muted' }, `${chk.unknown.length} unrecognised keys will be ignored.`) : null,
