@@ -8,6 +8,7 @@ import {
   h, clear, uid, btn, card, cardHead, empty, modal, field, selectField, checkbox,
   toast, fmtDate, tLabel, resolveDate, todayISO, toISO, fromISO, addDays, daysBetween,
   MONTHS, DOW, confirmDelete, relativeDay,
+  removeFrom
 } from '../ui.js';
 import { CALENDARS, calColor, calName, collectEvents, eventsByDay } from '../agenda.js';
 import { scheduleRow } from './shared.js';
@@ -247,7 +248,7 @@ export function openEvent(seed, redraw) {
     body,
     actions: [
       { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-        cal.events.splice(cal.events.indexOf(item), 1); S.touch('calendar'); redraw?.(); } },
+        removeFrom(cal.events, item); S.touch('calendar'); redraw?.(); } },
       'spacer',
       { label: 'Done', cls: 'btn-primary', onClick: () => redraw?.() },
     ],

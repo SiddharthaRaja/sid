@@ -10,6 +10,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, download, confirmDelete, todayISO, fmtDate, prose,
+  removeFrom
 } from '../ui.js';
 import { SCENE_SEED, EGG_SEED, SITE_NOTES } from '../data/website.js';
 import { scheduleRow } from './shared.js';
@@ -79,15 +80,16 @@ export function renderSite(sub) {
         wide: true,
         body: h('div',
           h('div', { class: 'grid g2' },
-            field('Name', s, 'name'),
-            selectField('Kind', s, 'kind', ['image', 'video', 'audio', 'text', 'interactive', 'cta'])),
-          field('What happens', s, 'brief', { multiline: true }),
-          field('Assets it needs', s, 'assets', { placeholder: '2400×3200 halftone still' }),
-          field('Technical note', s, 'tech', { multiline: true })),
+            field('Name', s, 'name', { slice: 'site' }),
+            selectField('Kind', s, 'kind', ['image', 'video', 'audio', 'text', 'interactive', 'cta'], { slice: 'site' })),
+          field('What happens', s, 'brief', { slice: 'site', multiline: true }),
+          field('Assets it needs', s, 'assets', { slice: 'site', placeholder: '2400×3200 halftone still' }),
+          field('Technical note', s, 'tech', { slice: 'site', multiline: true })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { w.scenes.splice(w.scenes.indexOf(s), 1); S.touch('site'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(w.scenes, s); S.touch('site'); draw(); } } : null,
           'spacer',
-          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && s.name) w.scenes.push(s); S.touch('site'); draw(); } },
+          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && !s.name) { toast('Give the scene a name first — nothing has been lost', 3000); return false; }
+            if (isNew) w.scenes.push(s); S.touch('site'); draw(); } },
         ].filter(Boolean),
       });
     }
@@ -130,15 +132,16 @@ export function renderSite(sub) {
         wide: true,
         body: h('div',
           h('div', { class: 'grid g2' },
-            field('Name', e, 'name'),
-            field('Path', e, 'leads', { placeholder: '/unreleased' })),
-          field('What triggers it', e, 'trigger', { multiline: true }),
-          field('What they get', e, 'reward', { multiline: true }),
-          field('Who will realistically find it', e, 'findable')),
+            field('Name', e, 'name', { slice: 'site' }),
+            field('Path', e, 'leads', { slice: 'site', placeholder: '/unreleased' })),
+          field('What triggers it', e, 'trigger', { slice: 'site', multiline: true }),
+          field('What they get', e, 'reward', { slice: 'site', multiline: true }),
+          field('Who will realistically find it', e, 'findable', { slice: 'site' })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { w.eggs.splice(w.eggs.indexOf(e), 1); S.touch('site'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(w.eggs, e); S.touch('site'); draw(); } } : null,
           'spacer',
-          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && e.name) w.eggs.push(e); S.touch('site'); draw(); } },
+          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && !e.name) { toast('Give it a name first — nothing has been lost', 3000); return false; }
+            if (isNew) w.eggs.push(e); S.touch('site'); draw(); } },
         ].filter(Boolean),
       });
     }

@@ -7,6 +7,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, confirmDelete, todayISO, fmtDate, prose,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
@@ -87,7 +88,7 @@ export function renderSeo(sub) {
           }, { cls: 'btn-sm btn-primary' }),
           btn('Edit', () => openSet(s), { cls: 'btn-sm' }),
           btn('Delete', () => confirmDelete(s.name, () => {
-            d.sets.splice(d.sets.indexOf(s), 1); S.touch('seo'); draw();
+            removeFrom(d.sets, s); S.touch('seo'); draw();
           }), { cls: 'btn-sm btn-ghost btn-danger' })));
     }
 
@@ -126,8 +127,8 @@ export function renderSeo(sub) {
         wide: true,
         body: h('div',
           h('div', { class: 'grid g2' },
-            field('Name', s, 'name', { placeholder: 'Instagram — release day' }),
-            selectField('Platform', s, 'platform', PLATFORMS.map(p => [p.key, p.name]))),
+            field('Name', s, 'name', { slice: 'seo', placeholder: 'Instagram — release day' }),
+            selectField('Platform', s, 'platform', PLATFORMS.map(p => [p.key, p.name]), { slice: 'seo' })),
           h('div', { class: 'hr' }),
           listBox,
           h('div', { class: 'row', style: { marginTop: '8px' } },
@@ -162,7 +163,7 @@ export function renderSeo(sub) {
               onInput: (e) => { k.k = e.target.value; S.touch('seo'); } }),
             btn('Copy', () => copy(k.k), { cls: 'btn-sm btn-ghost' }),
             h('button', { class: 'icon-btn', html: '&times;',
-              onClick: () => { d.keywords.splice(d.keywords.indexOf(k), 1); S.touch('seo'); draw(); } }))))
+              onClick: () => { removeFrom(d.keywords, k); S.touch('seo'); draw(); } }))))
         : h('div', { class: 'small muted', text: 'Empty. Six prompts below to fill it from.' }),
       A.hasKey() ? h('div', { style: { marginTop: '12px' } },
         btn('Suggest 20', async (e) => {

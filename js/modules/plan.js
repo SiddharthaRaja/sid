@@ -6,6 +6,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, checkbox,
   fmtDate, tLabel, resolveDate, relativeDay, todayISO, confirmDelete, selectField, toast,
+  removeFrom
 } from '../ui.js';
 import { SEED_MILESTONES, CATEGORIES, ATTACK_ORDER } from '../data/masterplan.js';
 import { progressBar, scheduleRow } from './shared.js';
@@ -167,7 +168,7 @@ export function renderPlan(sub) {
         { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
           const inCustom = (plan.custom || []).indexOf(m);
           if (inCustom > -1) plan.custom.splice(inCustom, 1);
-          else plan.milestones.splice(plan.milestones.indexOf(m), 1);
+          else removeFrom(plan.milestones, m);
           S.touch('plan'); redraw();
         } },
         'spacer',

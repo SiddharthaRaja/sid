@@ -6,6 +6,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   todayISO, fmtDate, confirmDelete, toast, download, copy, addDays,
+  removeFrom
 } from '../ui.js';
 import { RADIO_SEED, RADIO_INFO } from '../data/radio.js';
 import { COPY_BANK, fillTemplate, splitHint } from '../data/templates.js';
@@ -125,7 +126,7 @@ export function renderRadio(sub) {
       wide: true,
       actions: [
         { label: 'Draft the submission', cls: 'btn-ghost', keepOpen: true, onClick: () => draftSubmission(s, redraw) },
-        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { st.stations.splice(st.stations.indexOf(s), 1); S.touch('radio'); redraw(); } },
+        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(st.stations, s); S.touch('radio'); redraw(); } },
         'spacer',
         { label: 'Done', cls: 'btn-primary', onClick: redraw },
       ],

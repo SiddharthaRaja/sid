@@ -6,11 +6,11 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v20';
+const VERSION = 'sid-v22';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/app.js', './js/store.js', './js/backend.js', './js/ui.js', './js/icons.js',
+  './js/app.js', './js/store.js', './js/backend.js', './js/local.js', './js/journal.js', './js/filebackup.js', './js/ui.js', './js/icons.js',
   './js/charts.js', './js/agenda.js', './js/firebase-config.js',
   './js/phases.js', './js/theme.js', './js/mobile.js', './js/marks.js', './js/capture.js', './js/paste.js', './js/drive.js', './js/push.js', './js/lint.js', './js/assist.js', './js/imagetools.js',
   './js/data/platforms.js', './js/data/info.js', './js/data/masterplan.js',
@@ -47,14 +47,60 @@ const SHELL = [
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png', './icons/icon.svg',
 ];
 
+/* Files worth carrying across a version bump instead of re-downloading.
+   The rhyme and synonym dictionaries are 10 MB between them and change
+   approximately never; deleting them on every deploy made the user pay
+   for them again, on a phone, with no explanation. */
+const CARRY_OVER = /\/vendor\/notepad\/|\/docs\/social\//;
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
+  /* addAll is all-or-nothing, so one 404 or one request that lands
+     mid-deploy used to throw the whole precache away — silently, and
+     then activate anyway and delete the previous, complete cache.
+     Cache each file on its own and remember whether it worked. */
+  e.waitUntil((async () => {
+    const c = await caches.open(VERSION);
+    const results = await Promise.allSettled(SHELL.map(async (u) => {
+      const res = await fetch(u, { cache: 'reload' });
+      if (!res.ok) throw new Error(u + ' -> ' + res.status);
+      return c.put(u, res);
+    }));
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length) console.warn('[sw] precache incomplete:', failed.length, 'of', SHELL.length);
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== SHARE_CACHE).map(k => caches.delete(k))))
-    .then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    const old = keys.filter(k => k !== VERSION && k !== SHARE_CACHE);
+
+    /* Move the big, unchanging files forward before the old cache goes,
+       and if the precache did not complete, keep the old cache as a
+       fallback rather than leaving the app unopenable offline. */
+    const fresh = await caches.open(VERSION);
+    for (const k of old) {
+      const c = await caches.open(k);
+      for (const req of await c.keys()) {
+        if (!CARRY_OVER.test(new URL(req.url).pathname)) continue;
+        if (await fresh.match(req)) continue;
+        const res = await c.match(req);
+        if (res) await fresh.put(req, res);
+      }
+    }
+    /* Ask the cache itself whether the precache completed, rather than
+       trusting a variable: a service worker can be terminated between
+       its install and activate events, and a module-scope flag comes
+       back as its optimistic default — which would delete the last
+       working copy of the app on exactly the deploy that went wrong. */
+    let missing = 0;
+    for (const u of SHELL) if (!(await fresh.match(u))) missing++;
+    if (!missing) await Promise.all(old.map(k => caches.delete(k)));
+    else console.warn('[sw] keeping the previous cache:', missing, 'shell files are missing from', VERSION);
+
+    await self.clients.claim();
+  })());
 });
 
 
@@ -158,6 +204,13 @@ self.addEventListener('fetch', (e) => {
         caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+      /* Only fall back to the app shell for navigations. Returning
+         index.html for a missed .js request fails MIME checking and
+         produces a confusing syntax error instead of a clean miss. */
+      .catch(() => caches.match(e.request).then(r => {
+        if (r) return r;
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
+        return new Response('', { status: 504, statusText: 'offline and not cached' });
+      }))
   );
 });

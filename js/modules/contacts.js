@@ -7,6 +7,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   fmtDate, todayISO, addDays, relativeDay, confirmDelete, toast, download, copy, fmtNum,
+  removeFrom
 } from '../ui.js';
 import { KINDS, STATUSES, STATUS_CLS, VET_GREEN, VET_RED, CONTACTS_INFO } from '../data/contacts.js';
 import { COPY_BANK, fillTemplate, splitHint } from '../data/templates.js';
@@ -205,7 +206,7 @@ export function renderContacts(sub) {
       actions: [
         tplId ? { label: 'Draft the email', cls: 'btn-ghost', keepOpen: true, onClick: () => draftEmail(c, tplId) } : null,
         { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-          st.items.splice(st.items.indexOf(c), 1); S.touch('contacts'); draw(); } },
+          removeFrom(st.items, c); S.touch('contacts'); draw(); } },
         'spacer',
         { label: 'Done', cls: 'btn-primary', onClick: draw },
       ].filter(Boolean),

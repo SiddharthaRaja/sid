@@ -229,7 +229,22 @@ export function assistButton({ getText, setText, platform, type, onDone }) {
         parts.forEach(pt => out.append(h('div', { class: 'item' },
           h('div', { class: 'item-body', style: { WebkitLineClamp: 12 }, text: pt }),
           h('div', { class: 'row', style: { marginTop: '8px' } },
-            btn('Use this', () => { setText(pt); onDone?.(); close(); }, { cls: 'btn-sm btn-primary' }),
+            /* This replaces your whole draft. One tap, no undo — and
+               people open Assist out of curiosity with a finished
+               caption already written. Ask, unless there is nothing
+               to lose. */
+            btn('Use this', (ev) => {
+              const had = String(getText?.() || '').trim();
+              if (!had) { setText(pt); onDone?.(); close(); return; }
+              const b = ev?.target;
+              if (b && !b.dataset.armed) {
+                b.dataset.armed = '1';
+                b.textContent = 'Replace what you wrote?';
+                setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Use this'; } }, 4000);
+                return;
+              }
+              setText(pt); onDone?.(); close();
+            }, { cls: 'btn-sm btn-primary' }),
             btn('Copy', () => copy(pt), { cls: 'btn-sm btn-ghost' })))));
       } catch (e) { clear(out); out.append(h('div', { class: 'small', style: { color: 'var(--bad)' }, text: e.message })); }
     };

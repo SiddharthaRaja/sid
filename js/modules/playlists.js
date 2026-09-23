@@ -10,6 +10,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, confirmDelete, todayISO, fmtDate, fmtNum, relativeDay, daysBetween, prose,
+  removeFrom
 } from '../ui.js';
 import { KINDS, STATUSES, STATUS_TAG, FIND_ROUTES, SCAM_SIGNS, HEALTH_NOTE } from '../data/playlists.js';
 import { sparkline } from '../charts.js';
@@ -137,7 +138,7 @@ export function renderPlaylists(sub) {
         h('input', { class: 'inp mono', type: 'number', style: { maxWidth: '90px' }, value: c.position,
           placeholder: 'position', onInput: (e) => { c.position = Number(e.target.value); S.touch('playlists'); } }),
         h('button', { class: 'icon-btn', html: '&times;',
-          onClick: () => { x.checks.splice(x.checks.indexOf(c), 1); S.touch('playlists'); drawChecks(); } }))));
+          onClick: () => { removeFrom(x.checks, c); S.touch('playlists'); drawChecks(); } }))));
     };
     drawChecks();
 
@@ -146,20 +147,20 @@ export function renderPlaylists(sub) {
       wide: true,
       body: h('div',
         h('div', { class: 'grid g2' },
-          field('Playlist name', x, 'name'),
-          field('Curator', x, 'curator', { placeholder: 'the person, not the brand' }),
-          selectField('Kind', x, 'kind', KINDS.map(k => [k.key, k.name])),
-          field('Platform', x, 'platform', { placeholder: 'Spotify, Apple Music…' }),
-          field('Followers', x, 'followers', { type: 'number' }),
-          field('Your position in it', x, 'position', { type: 'number' }),
-          selectField('Status', x, 'status', STATUSES),
-          field('Contact', x, 'contact', { placeholder: 'email / handle' })),
-        field('URL', x, 'url', { placeholder: 'https://open.spotify.com/playlist/…' }),
+          field('Playlist name', x, 'name', { slice: 'playlists' }),
+          field('Curator', x, 'curator', { slice: 'playlists', placeholder: 'the person, not the brand' }),
+          selectField('Kind', x, 'kind', KINDS.map(k => [k.key, k.name]), { slice: 'playlists' }),
+          field('Platform', x, 'platform', { slice: 'playlists', placeholder: 'Spotify, Apple Music…' }),
+          field('Followers', x, 'followers', { slice: 'playlists', type: 'number' }),
+          field('Your position in it', x, 'position', { slice: 'playlists', type: 'number' }),
+          selectField('Status', x, 'status', STATUSES, { slice: 'playlists' }),
+          field('Contact', x, 'contact', { slice: 'playlists', placeholder: 'email / handle' })),
+        field('URL', x, 'url', { slice: 'playlists', placeholder: 'https://open.spotify.com/playlist/…' }),
         h('div', { class: 'grid g3' },
-          field('Pitched on', x, 'pitchedAt', { type: 'date' }),
-          field('Added on', x, 'addedAt', { type: 'date' }),
-          field('Dropped on', x, 'removedAt', { type: 'date' })),
-        field('Notes', x, 'notes', { multiline: true, placeholder: 'How you found them. What you said. Whether they replied like a human.' }),
+          field('Pitched on', x, 'pitchedAt', { slice: 'playlists', type: 'date' }),
+          field('Added on', x, 'addedAt', { slice: 'playlists', type: 'date' }),
+          field('Dropped on', x, 'removedAt', { slice: 'playlists', type: 'date' })),
+        field('Notes', x, 'notes', { slice: 'playlists', multiline: true, placeholder: 'How you found them. What you said. Whether they replied like a human.' }),
         h('div', { class: 'hr' }),
         h('div', { class: 'row' },
           h('span', { class: 'lab', text: 'Check-ins' }),
@@ -173,7 +174,7 @@ export function renderPlaylists(sub) {
         checkBox),
       actions: [
         !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () =>
-          confirmDelete(x.name || 'this playlist', () => { P.items.splice(P.items.indexOf(x), 1); S.touch('playlists'); draw(); }) } : null,
+          confirmDelete(x.name || 'this playlist', () => { removeFrom(P.items, x); S.touch('playlists'); draw(); }) } : null,
         'spacer',
         { label: 'Save', cls: 'btn-primary', onClick: () => {
           if (isNew && (x.name || x.curator)) P.items.push(x);

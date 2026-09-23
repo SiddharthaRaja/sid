@@ -26,41 +26,149 @@ import { resume } from './audio.js';
 /*  the store                                                  */
 /* ---------------------------------------------------------- */
 
+import * as L from '../local.js';
+
 const DB = 'sid-svara';
-const STORE = 'takes';
+const STORE = 'takes';      // metadata: id, name, seconds, effects
+const AUDIO = 'audio';      // the samples, keyed by the same id
 let dbp = null;
 
 function open() {
   if (dbp) return dbp;
   dbp = new Promise((res, rej) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => {
+    let r;
+    try { r = indexedDB.open(DB, 2); }
+    catch (e) { rej(e); return; }
+    r.onupgradeneeded = (ev) => {
       const db = r.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(AUDIO)) db.createObjectStore(AUDIO);
+
+      /* v1 kept the samples inside the metadata record, so listing the
+         takes pulled every one of them into memory — ten three-minute
+         takes is about 350 MB, which is enough to get a phone tab
+         killed — and changing one EQ slider rewrote the whole thing.
+         Move the audio into its own store. */
+      if (ev.oldVersion < 2) {
+        const t = r.transaction;
+        const metaS = t.objectStore(STORE);
+        const audioS = t.objectStore(AUDIO);
+        metaS.openCursor().onsuccess = (e) => {
+          const cur = e.target.result;
+          if (!cur) return;
+          const rec = cur.value;
+          if (rec && rec.samples) {
+            audioS.put(rec.samples, rec.id);
+            const { samples, ...meta } = rec;
+            cur.update(meta);
+          }
+          cur.continue();
+        };
+      }
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error || new Error('IndexedDB is unavailable'));
+    r.onblocked = () => rej(new Error('IndexedDB is blocked by another tab'));
+  }).catch((e) => {
+    /* Do NOT keep the rejected promise. Caching it made one transient
+       failure permanent for the whole session, and nothing ever said
+       so — you would record, and the take would simply not appear. */
+    dbp = null;
+    L.problem('Recordings cannot be saved on this device right now: ' + (e.message || e));
+    throw e;
   });
   return dbp;
 }
 
-const tx = async (mode, fn) => {
+const tx = async (mode, fn, stores = STORE) => {
   const db = await open();
   return new Promise((res, rej) => {
-    const t = db.transaction(STORE, mode);
-    const out = fn(t.objectStore(STORE));
-    t.oncomplete = () => res(out.result !== undefined ? out.result : out);
-    t.onerror = () => rej(t.error);
+    let t;
+    try { t = db.transaction(stores, mode); }
+    catch (e) { rej(e); return; }
+    let out;
+    try {
+      out = Array.isArray(stores)
+        ? fn(...stores.map(n => t.objectStore(n)))
+        : fn(t.objectStore(stores));
+    } catch (e) { rej(e); return; }
+    t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+    t.onerror = () => rej(t.error || new Error('Recording store failed'));
+    /* Without this, an aborted transaction — a quota abort above all —
+       left the promise pending for ever. `await putTake(...)` never
+       returned, so neither the success message nor the error branch
+       ran, and a lost take looked exactly like a saved one. */
+    t.onabort = () => rej(t.error || new Error('Out of storage space for recordings'));
   });
 };
 
-export const listTakes = () => tx('readonly', (s) => s.getAll())
-  .then(rows => (rows || []).sort((a, b) => b.at - a.at))
-  .catch(() => []);
+/** Is there room for roughly this many bytes? Checked BEFORE you sing,
+ *  not after. */
+export async function roomFor(bytes) {
+  try {
+    const e = await navigator.storage?.estimate?.();
+    if (!e || !e.quota) return { ok: true, unknown: true };
+    const free = e.quota - (e.usage || 0);
+    return { ok: free > bytes * 1.5, free, quota: e.quota };
+  } catch { return { ok: true, unknown: true }; }
+}
 
-export const getTake = (id) => tx('readonly', (s) => s.get(id)).catch(() => null);
-export const putTake = (take) => tx('readwrite', (s) => s.put(take));
-export const deleteTake = (id) => tx('readwrite', (s) => s.delete(id));
+/** Metadata only — no audio. Safe to call with a hundred takes. */
+export const listTakes = () => tx('readonly', (s) => s.getAll())
+  .then(rows => (rows || []).map(({ samples, ...meta }) => meta).sort((a, b) => b.at - a.at))
+  .catch((e) => { L.problem('Could not list your recordings: ' + (e.message || e)); return []; });
+
+/** Metadata plus the audio, joined from the two stores. */
+export function getTake(id) {
+  return open().then(db => new Promise((res, rej) => {
+    const t = db.transaction([STORE, AUDIO], 'readonly');
+    const mreq = t.objectStore(STORE).get(id);
+    const areq = t.objectStore(AUDIO).get(id);
+    t.oncomplete = () => {
+      const meta = mreq.result;
+      if (!meta) return res(null);
+      res({ ...meta, samples: areq.result !== undefined ? areq.result : meta.samples });
+    };
+    t.onerror = () => rej(t.error || new Error('Could not read the recording'));
+    t.onabort = () => rej(t.error || new Error('Reading the recording was aborted'));
+  }));
+}
+export const getTakeFull = getTake;
+
+/** Write a take: metadata and audio together, atomically. */
+export function putTake(take) {
+  const { samples, ...meta } = take;
+  return open().then(db => new Promise((res, rej) => {
+    let t;
+    try { t = db.transaction([STORE, AUDIO], 'readwrite'); }
+    catch (e) { rej(e); return; }
+    try {
+      t.objectStore(STORE).put(meta);
+      if (samples) t.objectStore(AUDIO).put(samples, meta.id);
+    } catch (e) { rej(e); return; }
+    t.oncomplete = () => res(meta.id);
+    t.onerror = () => rej(t.error || new Error('Could not save the recording'));
+    t.onabort = () => rej(t.error || new Error('Out of storage space for recordings'));
+  }));
+}
+
+/** Change only the metadata — an effects tweak, a rename.
+ *  This used to rewrite the whole multi-megabyte record. */
+export const putTakeMeta = (meta) => {
+  const { samples, ...rest } = meta;
+  return tx('readwrite', (s) => s.put(rest));
+};
+
+export function deleteTake(id) {
+  return open().then(db => new Promise((res, rej) => {
+    const t = db.transaction([STORE, AUDIO], 'readwrite');
+    t.objectStore(STORE).delete(id);
+    t.objectStore(AUDIO).delete(id);
+    t.oncomplete = () => res(true);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error || new Error('Delete was aborted'));
+  }));
+}
 
 /** Roughly how much space the takes use, and what the browser allows. */
 export async function usage() {

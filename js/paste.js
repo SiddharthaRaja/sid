@@ -98,7 +98,15 @@ function optionsFor(c) {
     opts.push({
       label: 'Make a tagged link',
       note: 'Opens the UTM builder with this URL in it.',
-      fn: () => { const L = S.get('links'); L.draft = { url: c.url }; S.touch('links'); go('#/ads/links'); },
+      /* Merge into the draft — replacing it wholesale wiped the
+         half-built tagged link (campaign, creative, label) and put
+         the URL in a key the builder does not even read. */
+      fn: () => {
+        const L = S.get('links');
+        L.draft = { ...(L.draft || {}), base: c.url };
+        S.touch('links');
+        go('#/ads/links');
+      },
     });
   }
 
@@ -169,7 +177,12 @@ function optionsFor(c) {
 /* ---------------------------------------------------------- */
 
 export function initPaste() {
+  /* nothing may be captured before the store knows whose data it is */
   document.addEventListener('paste', (e) => {
+    /* Nothing may be captured before the store knows whose data it is.
+       This listener is live on the sign-in screen too, and anything it
+       wrote there went into an unowned bucket and was dropped. */
+    if (!S.isReady()) return;
     /* if you are typing in a field, a paste is just a paste */
     const a = document.activeElement;
     if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;

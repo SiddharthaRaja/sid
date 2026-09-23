@@ -5,6 +5,7 @@
 import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, empty, field, modal, confirmDelete, todayISO, fmtDate, copy, toast,
+  removeFrom
 } from '../ui.js';
 import { mediaBlock } from './shared.js';
 import { icon } from '../icons.js';
@@ -77,7 +78,7 @@ export function renderNotes() {
           h('label', { class: 'field' }, h('span', { class: 'lab', text: 'Attachments' }), mediaBlock(n, 'notes', 'notes'))),
         actions: [
           { label: 'Copy', cls: 'btn-ghost', keepOpen: true, onClick: () => copy(n.body || '') },
-          { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { st.items.splice(st.items.indexOf(n), 1); S.touch('notes'); drawList(); } },
+          { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(st.items, n); S.touch('notes'); drawList(); } },
           'spacer',
           { label: 'Done', cls: 'btn-primary', onClick: drawList },
         ],

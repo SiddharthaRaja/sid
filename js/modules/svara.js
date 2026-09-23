@@ -17,6 +17,7 @@
    ============================================================ */
 
 import * as S from '../store.js';
+import * as L from '../local.js';
 import {
   h, clear, btn, card, cardHead, pageHead, subtabs, empty, toast, uid,
   fmtDate, todayISO, confirmDelete, fmtNum, modal, download, prose,
@@ -124,7 +125,55 @@ export function leaveSvara() {
   A.stopAll();
   frameHooks.clear();
   stopRun();
-  if (REC.recording()) REC.stopRecording();
+  /* A take in progress used to be stopped and thrown away — one
+     sideways swipe and three minutes of singing were gone with no
+     prompt. Now leaving ends the take and keeps it. */
+  if (REC.recording()) {
+    const save = pendingTakeSaver;
+    const out = REC.stopRecording();
+    if (save && out && out.samples && out.samples.length) {
+      save(out).then(
+        () => toast('Recording saved to Svara takes', 3000),
+        (e) => {
+          /* This was a console.warn. You would swipe away mid-take and
+             be told nothing at all while the audio disappeared. */
+          L.problem('A recording could not be saved: ' + (e.message || e));
+          toast('That recording could NOT be saved: ' + (e.message || e), 6000);
+        });
+    }
+  }
+  pendingTakeSaver = null;
+}
+
+/* Set by the recorder pane so leaveSvara() can finish its work. */
+let pendingTakeSaver = null;
+
+/* Closing the tab mid-take used to lose it outright: the lifecycle
+   handlers in store.js only flush slices, and an in-progress recording
+   is not a slice. Now the audio is stopped and written like any other
+   take, and the leave-page prompt fires while it happens. */
+let recordingGuardInstalled = false;
+function installRecordingGuard() {
+  if (recordingGuardInstalled) return;
+  recordingGuardInstalled = true;
+  const rescue = () => {
+    if (!REC.recording()) return false;
+    const save = pendingTakeSaver;
+    const out = REC.stopRecording();
+    if (save && out && out.samples && out.samples.length) {
+      save(out).catch(e => L.problem('A recording could not be saved as the app closed: ' + (e.message || e)));
+      return true;
+    }
+    return false;
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') rescue(); });
+  window.addEventListener('pagehide', rescue);
+  window.addEventListener('beforeunload', (e) => {
+    if (!REC.recording()) return;
+    rescue();
+    e.preventDefault();
+    e.returnValue = '';
+  });
 }
 
 /* ---------------------------------------------------------- */
@@ -708,25 +757,44 @@ function takesPane() {
   const levelBar = h('div', { class: 'sv-cents', style: { height: '10px' } }, level);
   let timer = null;
 
+  /* One place that turns captured audio into a stored take, used by
+     the Record button AND by leaveSvara() when you navigate away
+     mid-take. */
+  async function saveTake(out) {
+    const ex = byId(SV().current);
+    return REC.putTake({
+      id: uid(), at: Date.now(),
+      name: ex ? ex.name : 'Take',
+      seconds: out.samples.length / out.sampleRate,
+      sampleRate: out.sampleRate,
+      samples: out.samples,                    // the master, never rewritten
+      effects: { ...REC.NO_EFFECTS },
+    });
+  }
+  pendingTakeSaver = saveTake;
+  installRecordingGuard();
+
   const recBtn = btn('Record', async () => {
     if (REC.recording()) {
       clearInterval(timer);
       const out = REC.stopRecording();
       recBtn.textContent = 'Record'; recBtn.classList.remove('on');
       if (!out || !out.samples.length) { status.textContent = 'Nothing was captured.'; return; }
-      const ex = byId(SV().current);
-      const take = {
-        id: uid(), at: Date.now(),
-        name: ex ? ex.name : 'Take',
-        seconds: out.samples.length / out.sampleRate,
-        sampleRate: out.sampleRate,
-        samples: out.samples,                    // the master, never rewritten
-        effects: { ...REC.NO_EFFECTS },
-      };
-      try { await REC.putTake(take); status.textContent = 'Saved on this device.'; rerenderPane(); }
+      try { await saveTake(out); status.textContent = 'Saved on this device.'; rerenderPane(); }
       catch (e) { status.textContent = `Could not save: ${e.message}`; }
       return;
     }
+
+    /* Check there is room before you sing, not after. The old flow's
+       first contact with storage was the save at the end — three
+       minutes in, with the audio already captured and nowhere to go. */
+    try {
+      const room = await REC.roomFor(60 * 1024 * 1024);
+      if (!room.ok) {
+        status.textContent = `Not enough storage room to record (about ${((room.free || 0) / 1048576).toFixed(0)} MB free). Export and delete some takes first — Settings → Backup can download them all.`;
+        return;
+      }
+    } catch {}
 
     try {
       const live = await REC.startRecording(p => { level.style.left = `${Math.min(100, p * 140)}%`; });
@@ -768,52 +836,90 @@ function takesPane() {
   return box;
 }
 
+/* `take` here is METADATA ONLY — the audio is fetched when you ask for
+   it. Building a WAV blob for every take on render meant ten
+   three-minute takes put ~350 MB of live blobs in the page the moment
+   you opened the tab, which on a phone gets the tab killed — taking
+   any recording in progress with it. */
 function takeCard(take) {
-  const audio = h('audio', { controls: true, style: { width: '100%', marginTop: '8px' } });
+  const audio = h('audio', { controls: true, preload: 'none', style: { width: '100%', marginTop: '8px', display: 'none' } });
+  const note = h('span', { class: 'small muted' });
   let url = null;
 
-  const load = async (withEffects) => {
-    const samples = withEffects
-      ? await REC.renderWithEffects(take.samples, take.sampleRate, take.effects)
-      : take.samples;
-    if (url) URL.revokeObjectURL(url);
-    url = URL.createObjectURL(REC.encodeWav(samples, take.sampleRate));
-    audio.src = url;
+  const release = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+
+  const load = async () => {
+    note.textContent = 'loading…';
+    try {
+      const full = await REC.getTake(take.id);
+      if (!full || !full.samples) { note.textContent = 'The audio for this take is missing.'; return null; }
+      const samples = REC.effectsActive(take.effects)
+        ? await REC.renderWithEffects(full.samples, full.sampleRate, take.effects)
+        : full.samples;
+      release();
+      url = URL.createObjectURL(REC.encodeWav(samples, full.sampleRate));
+      audio.src = url;
+      audio.style.display = '';
+      note.textContent = '';
+      return full;
+    } catch (e) { note.textContent = 'Could not load it: ' + (e.message || e); return null; }
   };
-  load(REC.effectsActive(take.effects));
+
+  /* Hand the blob back as soon as playback is done with it. */
+  audio.addEventListener('ended', () => {}, { passive: true });
 
   return card(
     cardHead(take.name,
-      h('span', { class: 'tag mono', text: `${take.seconds.toFixed(1)}s` })),
+      h('span', { class: 'tag mono', text: `${(take.seconds || 0).toFixed(1)}s` })),
     h('div', { class: 'small muted', text: fmtDate(new Date(take.at).toISOString().slice(0, 10)) }),
     audio,
     h('div', { class: 'row', style: { marginTop: '8px' } },
-      btn('Effects', () => effectsSheet(take, () => load(true)), { cls: 'btn-sm' }),
-      btn('Export', async () => {
-        const samples = REC.effectsActive(take.effects)
-          ? await REC.renderWithEffects(take.samples, take.sampleRate, take.effects)
-          : take.samples;
-        const blob = REC.encodeWav(samples, take.sampleRate);
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${take.name.replace(/[^\w -]/g, '')}.wav`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      btn('Play', load, { cls: 'btn-sm' }),
+      note,
+      h('div', { style: { flex: 1 } }),
+      btn('Effects', () => effectsSheet(take, () => { if (url) load(); }), { cls: 'btn-sm' }),
+      btn('Export', async (e) => {
+        const b = e.target.closest('button'); b.disabled = true; b.textContent = 'preparing…';
+        try {
+          const full = await REC.getTake(take.id);
+          if (!full || !full.samples) throw new Error('the audio is missing');
+          const samples = REC.effectsActive(take.effects)
+            ? await REC.renderWithEffects(full.samples, full.sampleRate, take.effects)
+            : full.samples;
+          const blob = REC.encodeWav(samples, full.sampleRate);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${String(take.name || 'take').replace(/[^\w -]/g, '')}.wav`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        } catch (err) { toast('Could not export: ' + (err.message || err), 5000); }
+        b.disabled = false; b.textContent = 'Export';
       }, { cls: 'btn-sm' }),
       REC.effectsActive(take.effects)
         ? btn('Back to the original', async () => {
             take.effects = { ...REC.NO_EFFECTS };
-            await REC.putTake(take); load(false); toast('Effects cleared');
+            /* metadata only — the master is never rewritten */
+            try { await REC.putTakeMeta(take); if (url) await load(); toast('Effects cleared'); }
+            catch (e) { toast('Could not clear the effects: ' + (e.message || e), 5000); }
           }, { cls: 'btn-sm btn-ghost' })
         : null,
       btn('Delete', () => confirmDelete('this take', async () => {
-        await REC.deleteTake(take.id); rerenderPane();
+        release();
+        try { await REC.deleteTake(take.id); } catch (e) { toast('Could not delete: ' + (e.message || e), 4000); }
+        rerenderPane();
       }), { cls: 'btn-sm btn-ghost btn-danger' })));
 }
 
 function effectsSheet(take, onChange) {
   const s = { ...REC.NO_EFFECTS, ...(take.effects || {}) };
-  const commit = async () => { take.effects = s; await REC.putTake(take); onChange && onChange(); };
+  const commit = async () => {
+    take.effects = s;
+    /* Metadata only. Re-putting the whole record meant every slider
+       nudge rewrote tens of megabytes, which needs double that free to
+       commit — and an abort there used to hang for ever. */
+    try { await REC.putTakeMeta(take); onChange && onChange(); }
+    catch (e) { toast('Could not save the effect change: ' + (e.message || e), 5000); }
+  };
 
   const slider = (label, key, min, max, step, fmt) => {
     const out = h('span', { class: 'small mono muted', text: fmt(s[key]) });

@@ -10,6 +10,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, confirmDelete, todayISO, fmtDate,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
@@ -188,8 +189,8 @@ export function renderWrite(sub) {
         modal({
           title: 'Save a phrase',
           body: h('div',
-            field('The line', p, 'text', { multiline: true, placeholder: 'Anything you want to reuse. [BRACKETS] fill from the Release tab.' }),
-            field('Tag', p, 'tag', { placeholder: 'hook, cta, bio…' })),
+            field('The line', p, 'text', { slice: 'write', multiline: true, placeholder: 'Anything you want to reuse. [BRACKETS] fill from the Release tab.' }),
+            field('Tag', p, 'tag', { slice: 'write', placeholder: 'hook, cta, bio…' })),
           actions: [{ label: 'Cancel' }, { label: 'Save', cls: 'btn-primary', onClick: () => {
             if (!p.text.trim()) return;
             w.phrases.push(p); S.touch('write'); draw();
@@ -203,7 +204,7 @@ export function renderWrite(sub) {
               p.tag ? h('span', { class: 'tag', text: p.tag }) : null),
             h('div', { class: 'row', style: { marginTop: '6px' } },
               btn('Copy', () => copy(fillTemplate(p.text, S.get('settings'))), { cls: 'btn-sm btn-ghost' }),
-              btn('Delete', () => { w.phrases.splice(w.phrases.indexOf(p), 1); S.touch('write'); draw(); }, { cls: 'btn-sm btn-ghost btn-danger' })))))
+              btn('Delete', () => { removeFrom(w.phrases, p); S.touch('write'); draw(); }, { cls: 'btn-sm btn-ghost btn-danger' })))))
         : h('div', { class: 'small muted', text: 'Nothing yet. When a line works, save it here rather than digging through old posts for it.' })));
 
     const group = (title, items, note) => {
@@ -248,13 +249,13 @@ export function renderWrite(sub) {
         title: isNew ? 'Add to the swipe file' : 'Swipe',
         wide: true,
         body: h('div',
-          field('The post', s, 'text', { multiline: true, tall: true, placeholder: 'Paste the caption exactly as they wrote it.' }),
+          field('The post', s, 'text', { slice: 'write', multiline: true, tall: true, placeholder: 'Paste the caption exactly as they wrote it.' }),
           h('div', { class: 'grid g2' },
-            field('Who', s, 'who', { placeholder: 'artist or account' }),
-            field('Where', s, 'platform', { placeholder: 'Instagram, TikTok…' })),
-          field('Why it works', s, 'why', { multiline: true, placeholder: 'The thing you want to steal — the shape, not the words.' })),
+            field('Who', s, 'who', { slice: 'write', placeholder: 'artist or account' }),
+            field('Where', s, 'platform', { slice: 'write', placeholder: 'Instagram, TikTok…' })),
+          field('Why it works', s, 'why', { slice: 'write', multiline: true, placeholder: 'The thing you want to steal — the shape, not the words.' })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { w.swipe.splice(w.swipe.indexOf(s), 1); S.touch('write'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(w.swipe, s); S.touch('write'); draw(); } } : null,
           'spacer',
           { label: 'Save', cls: 'btn-primary', onClick: () => {
             if (!s.text.trim()) return;

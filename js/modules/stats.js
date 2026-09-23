@@ -6,6 +6,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, stat, fmtNum,
   todayISO, fmtDate, confirmDelete, subtabs, selectField, toast, download,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS, PLATFORM_MAP } from '../data/platforms.js';
 import { PCOLORS, icon } from '../icons.js';
@@ -477,7 +478,7 @@ function openEntry(p, store, slice, existing, redraw) {
     body, wide: true,
     actions: [
       { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-        store.stats.splice(store.stats.indexOf(e), 1); S.touch(slice); redraw(); } },
+        removeFrom(store.stats, e); S.touch(slice); redraw(); } },
       'spacer',
       { label: 'Done', cls: 'btn-primary', onClick: redraw },
     ],

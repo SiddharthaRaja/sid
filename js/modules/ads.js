@@ -18,6 +18,7 @@ import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   stat, fmtNum, fmtDate, resolveDate, tLabel, todayISO, addDays, daysBetween,
   relativeDay, confirmDelete, toast, download, copy, progress,
+  removeFrom
 } from '../ui.js';
 import {
   CAMPAIGNS_SEED, AD_PLATFORMS, OBJECTIVES, CREATIVE_SPEC, ADS_INFO,
@@ -482,7 +483,7 @@ The exception is YouTube in-feed discovery at $5/day, which is worth running alo
                 text: cpa == null ? '—' : '$' + cpa.toFixed(2) }),
               h('td', {}, h('button', { class: 'icon-btn', html: '&times;', title: 'Remove this day',
                 onClick: () => confirmDelete('this day', () => {
-                  c.log.splice(c.log.indexOf(r), 1); S.touch('ads'); draw();
+                  removeFrom(c.log, r); S.touch('ads'); draw();
                 }) })));
           }))))));
     });
@@ -711,7 +712,7 @@ The exception is YouTube in-feed discovery at $5/day, which is worth running alo
         field('Notes', c, 'notes', { slice: 'ads', multiline: true })),
       actions: [
         { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-          st.campaigns.splice(st.campaigns.indexOf(c), 1); S.touch('ads'); draw(); } },
+          removeFrom(st.campaigns, c); S.touch('ads'); draw(); } },
         'spacer',
         { label: 'Done', cls: 'btn-primary', onClick: draw },
       ],

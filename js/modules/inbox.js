@@ -22,6 +22,7 @@ import * as B from '../backend.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, selectField,
   toast, copy, confirmDelete, fmtDate, todayISO, esc,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
@@ -45,13 +46,19 @@ export async function drainShares() {
       const res = await cache.match(PENDING);
       if (res) {
         const payload = await res.json();
-        await cache.delete(PENDING);
+        /* Persist FIRST, delete the stash second. The old order
+           deleted the only copy before the 150ms debounced write had
+           even been scheduled — a cold boot that died in that window
+           lost whatever you had shared in, silently. */
         if (payload && (payload.text || payload.url || payload.title || payload.files?.length)) {
-          push(payload); added++;
+          push(payload);
+          await S.flushAll().catch(() => {});
+          added++;
         }
+        await cache.delete(PENDING);
       }
     }
-  } catch { /* cache unavailable — not fatal */ }
+  } catch (e) { console.warn('share drain failed — the shared item is still in the cache', e); }
 
   /* 2. the GET fallback — some platforms send query params */
   try {
@@ -125,8 +132,13 @@ export function renderInbox() {
         btn('Paste', pasteIn, { cls: 'btn-primary btn-sm', icon: 'plus' }),
         filed.length ? btn(showFiled ? 'Show waiting' : 'Show filed',
           () => { showFiled = !showFiled; draw(); }, { cls: 'btn-sm btn-ghost' }) : null,
-        filed.length ? btn('Clear filed', () => confirmDelete(`${filed.length} filed items`, () => {
+        filed.length ? btn('Clear filed', () => confirmDelete(`${filed.length} filed items`, async () => {
+          /* Release the shared blobs as well. Filtering the list alone
+             orphaned them in the share cache for ever, quietly eating
+             the same storage quota the recordings need. */
+          const going = st.items.filter(i => i.filed);
           st.items = st.items.filter(i => !i.filed); S.touch('inbox'); draw();
+          for (const i of going) { try { await removeFiles(i); } catch {} }
         }), { cls: 'btn-sm btn-ghost' }) : null)));
 
     if (!shown.length) {
@@ -174,7 +186,7 @@ export function renderInbox() {
       h('button', { class: 'icon-btn', html: '&times;', title: 'Delete',
         onClick: () => confirmDelete('this item', () => {
           removeFiles(item);
-          st.items.splice(st.items.indexOf(item), 1); S.touch('inbox'); draw();
+          removeFrom(st.items, item); S.touch('inbox'); draw();
         }) })));
 
     return box;
@@ -252,6 +264,7 @@ export function renderInbox() {
             status: 'idea', when: '', media: [],
           };
 
+          const failed = [];
           if (item.files?.length) {
             let n = 0;
             for (const f of item.files) {
@@ -259,14 +272,23 @@ export function renderInbox() {
               try {
                 const blob = await blobFor(f);
                 if (blob) draft.media.push(await B.uploadMedia(new File([blob], f.name, { type: f.type }), `${pick.platform}/${pick.type}`));
-              } catch (e) { toast(e.message || 'One file failed to upload', 3500); }
+                else failed.push(f.name);
+              } catch (e) { failed.push(f.name); console.warn('upload failed', f.name, e); }
             }
           }
 
           store.content[pick.type].unshift(draft);
           S.touch(slice);
-          item.filed = true; S.touch('inbox');
-          toast('Draft created');
+
+          /* Only file it away if everything made it. Marking it filed
+             regardless hid it from the default view behind a cheerful
+             "Draft created", with the missing photos gone for good. */
+          if (failed.length) {
+            toast(`Draft created, but ${failed.length} file${failed.length > 1 ? 's' : ''} did not upload — the item is still in your inbox so you can retry.`, 6000);
+          } else {
+            item.filed = true; S.touch('inbox');
+            toast('Draft created');
+          }
           close();
           draw();
         } },

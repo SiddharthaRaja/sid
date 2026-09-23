@@ -10,6 +10,7 @@ import {
   h, clear, uid, btn, card, cardHead, empty, field, stat, subtabs, modal,
   fmtDate, tLabel, resolveDate, todayISO, addDays, daysBetween, fmtNum,
   toISO, fromISO, MONTHS, DOW, download, copy, toast, confirmDelete,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
@@ -153,7 +154,8 @@ export function renderReview(sub) {
       btn('Last week', () => { weekStart = mondayOf(addDays(todayISO(), -7)); draw(); }, { cls: 'btn-sm' }),
       btn('This week', () => { weekStart = mondayOf(todayISO()); draw(); }, { cls: 'btn-sm' }),
       h('div', { style: { flex: 1 } }),
-      existing ? h('span', { class: 'tag ok', text: 'saved' }) : null));
+      existing && existing.savedAt ? h('span', { class: 'tag ok', text: 'saved' })
+        : existing ? h('span', { class: 'tag', text: 'draft — saved on this device' }) : null));
 
     /* headline */
     const spend = g.ads.reduce((a, x) => a + x.planned, 0);
@@ -240,9 +242,17 @@ export function renderReview(sub) {
           : h('span', { class: 'small muted', text: '— save this review and the next one shows the change' }))));
 
     /* the part only you can write */
-    const r = existing || {
-      id: uid(), weekStart, worked: '', didnt: '', oneThing: '', notes: '', savedAt: '',
-    };
+    /* The draft joins the list straight away, before you type a word.
+       It used to be a loose object that only joined when you pressed
+       Save — so every keystroke marked the slice dirty, the pill said
+       "saved", and the whole review vanished if you switched subtabs
+       first. An empty draft costs nothing; a lost review does not. */
+    let r = existing;
+    if (!r) {
+      r = { id: uid(), weekStart, worked: '', didnt: '', oneThing: '', notes: '', savedAt: '' };
+      st.reviews.push(r);
+      S.touch('review');
+    }
 
     box.append(card(
       cardHead('The part only you can write'),
@@ -266,14 +276,13 @@ export function renderReview(sub) {
           assetsTotal: g.assetsNow,
           movement: g.movement.map(m => ({ platform: m.platform.name, metric: m.metric, delta: m.delta })),
         };
-        if (!existing) st.reviews.push(r);
-        S.touch('review');
+        S.touch('review');   // the draft is already in the list
         toast('Review saved');
         draw();
       }, { cls: 'btn-primary' }),
-      existing ? btn('Delete', () => confirmDelete('this review', () => {
-        st.reviews.splice(st.reviews.indexOf(existing), 1); S.touch('review'); draw();
-      }), { cls: 'btn-danger btn-ghost' }) : null,
+      btn('Delete', () => confirmDelete('this review', () => {
+        removeFrom(st.reviews, r); S.touch('review'); draw();
+      }), { cls: 'btn-danger btn-ghost' }),
       h('div', { style: { flex: 1 } }),
       btn('Copy as text', () => copy(asMarkdown(r, g)), { cls: 'btn-ghost btn-sm' })));
 

@@ -6,6 +6,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   fmtDate, resolveDate, todayISO, confirmDelete, fmtNum, download, stat, toast,
+  removeFrom
 } from '../ui.js';
 import { FORMS_SEED, ACCOUNTS_SEED, BUDGET_SEED, FINANCE_INFO } from '../data/finance.js';
 import { infoPanel, notesPanel, progressBar, scheduleRow } from './shared.js';
@@ -93,7 +94,7 @@ export function renderFinance(sub) {
         field('URL', f, 'url', { slice: 'finance' }),
         field('Your notes', f, 'notes', { slice: 'finance', multiline: true, placeholder: 'Reference numbers, dates filed, who you spoke to' })),
       actions: [
-        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { st.forms.splice(st.forms.indexOf(f), 1); S.touch('finance'); draw(); } },
+        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(st.forms, f); S.touch('finance'); draw(); } },
         'spacer', { label: 'Done', cls: 'btn-primary', onClick: draw },
       ],
       onClose: draw,
@@ -140,7 +141,7 @@ export function renderFinance(sub) {
           h('span', { text: 'W-8BEN filed with this payer' })),
         field('Notes', a, 'note', { slice: 'finance', multiline: true })),
       actions: [
-        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { st.accounts.splice(st.accounts.indexOf(a), 1); S.touch('finance'); draw(); } },
+        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(st.accounts, a); S.touch('finance'); draw(); } },
         'spacer', { label: 'Done', cls: 'btn-primary', onClick: draw },
       ],
       onClose: draw,

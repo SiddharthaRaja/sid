@@ -4,7 +4,8 @@
 
 import * as B from './backend.js';
 import * as S from './store.js';
-import { $, $$, h, clear, toast, modal } from './ui.js';
+import { $, $$, h, clear, toast, modal, download } from './ui.js';
+import * as L from './local.js';
 import { icon, PCOLORS } from './icons.js';
 import { PLATFORMS, PLATFORM_GROUPS, platformsIn } from './data/platforms.js';
 
@@ -534,6 +535,11 @@ async function start() {
     return;
   }
 
+  /* onAuthStateChanged fires again on every token refresh. Booting
+     twice used to re-run loadAll over live state and throw away
+     anything not yet flushed. Once is once. */
+  let started = false;
+
   B.onAuth(async (u, err) => {
     if (!u) {
       $('#boot').hidden = true;
@@ -542,9 +548,28 @@ async function start() {
       return;
     }
     $('#gate').hidden = true;
+    if (started) return;
+    started = true;
+
+    /* Before anything else: point the device store at this account.
+       Quick capture and the paste handler are live from page load —
+       they are on the sign-in screen too — so a note typed before this
+       ran was written into an "anon" bucket and then silently dropped
+       when the real data loaded. */
+    L.setNamespace(u.uid);
     bootMsg('loading your data…');
 
-    await S.loadAll(ALL_SLICES);
+    try {
+      await S.loadAll(ALL_SLICES);
+    } catch (e) {
+      /* Never leave a stuck spinner, and never carry on into an app
+         that will happily write blanks over real data. */
+      console.error(e);
+      bootMsg('Could not load your data: ' + (e.message || e) +
+        ' — nothing has been changed. Check your connection and reopen.');
+      started = false;
+      return;
+    }
     seedDefaults();
 
     /* anything shared into Sid from another app while it was closed */
@@ -565,7 +590,11 @@ async function start() {
 
     applyTheme();
 
-    $('#user-name').textContent = u.displayName || u.email || 'Local';
+    /* The email, not just the display name: two Google accounts of
+       yours have the same name on them, and the name is what used to
+       be shown. */
+    $('#user-name').textContent = u.email || u.displayName || 'Local';
+    $('#user-name').title = `${u.displayName || ''} ${u.email || ''}`.trim();
     if (u.photoURL) $('#user-pic').src = u.photoURL; else $('#user-pic').remove();
 
     buildNav();
@@ -573,9 +602,21 @@ async function start() {
 
     $('#boot').hidden = true;
     $('#app').hidden = false;
+    document.body.dataset.ready = '1';      // unhides quick capture
+
+    /* Did the account change since this device was last used? This is
+       checked directly rather than inferred from "the app looks
+       empty", because the wrong account having its own data is
+       exactly when the mistake is hardest to spot. */
+    const prev = L.lastAccount();
+    if (prev && prev.uid && prev.uid !== u.uid) {
+      accountChanged = { from: prev, to: { uid: u.uid, email: u.email || '' } };
+    }
+    L.rememberAccount(u.uid, u.email);
 
     // a snapshot every time you open the app
-    S.snapshotNow('session-open').catch(() => {});
+    S.snapshotNow('session-open').catch(e => console.warn('session snapshot', e));
+    paintHealth();
 
     /* Refresh the notification plan. The sender only ever forwards
        what was planned here, so opening the app is what keeps the
@@ -593,6 +634,83 @@ S.onStatus((s) => {
   $('#sync-text').textContent =
     s === 'saving' ? 'saving…' : s === 'offline' ? 'offline — queued' : s === 'error' ? 'retrying' : 'saved';
 });
+
+/* ---------- the storage health banner ----------
+   Every persistence failure now has a voice. The one that cost three
+   hours of writing was invisible: the app said "saving…" and meant
+   "hanging". Anything that stops your work reaching the cloud says so
+   here, tells you your device copy is intact, and puts the backup
+   button one tap away. */
+
+export function exportBackup() {
+  try {
+    S.flushLocal();
+    const name = `sid-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+    download(name, JSON.stringify(S.everything(), null, 2));
+    L.markExported();
+    return true;
+  } catch (e) { toast('Export failed: ' + (e.message || e), 4000); return false; }
+}
+
+let healthDismissed = '';
+let accountChanged = null;
+
+function paintHealth() {
+  const bar = $('#health');
+  if (!bar) return;
+  const hh = S.health;
+  const probs = L.problems;
+
+  /* Signed into the wrong account: the app is empty and correct, and
+     your work is sitting on this very device under the other sign-in.
+     There is no other symptom, so this has to be said out loud. */
+  const accounts = L.namespaceSummary();
+  const mine = accounts.find(a => a.ns === L.namespace());
+  const other = accounts.find(a => a.ns !== L.namespace() && a.sections >= 3);
+
+  let level = '', text = '';
+  if (accountChanged) {
+    level = 'bad';
+    text = `You are signed in as ${accountChanged.to.email || 'a different account'}. `
+      + `Last time Sid was opened on this device it was ${accountChanged.from.email || 'another account'}. `
+      + `Nothing has been lost or mixed up — each account's data is kept separately — but if this is the wrong one, sign out and back in before you type anything.`;
+  }
+  else if (other && (!mine || mine.sections <= 1)) {
+    level = 'bad';
+    text = 'This account looks empty, but this device holds data saved under a different Google sign-in. Nothing is lost — check Settings → Backup before you type anything.';
+  }
+  /* "stuck" outranks everything: it is the only state that will not
+     fix itself, and the only one where saying "it will sync when the
+     connection recovers" would be a lie. */
+  else if (hh.cloud === 'stuck') { level = 'bad'; text = hh.detail; }
+  else if (hh.cloud === 'blocked') { level = 'bad'; text = hh.detail; }
+  else if (hh.cloud === 'failing') { level = 'bad'; text = hh.detail; }
+  else if (hh.cloud === 'stalled') { level = 'warn'; text = hh.detail; }
+  else if (probs.length) { level = 'warn'; text = probs[0]; }
+  else if (L.daysSinceExport() > 7) {
+    level = 'warn';
+    text = L.lastExport()
+      ? 'Your last downloaded backup was more than a week ago.'
+      : 'You have never downloaded a backup. One file on your computer is the only copy nothing online can take away.';
+  }
+
+  if (!text || healthDismissed === text) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.dataset.level = level;
+  $('#health-text').textContent = text;
+}
+
+/* Exposed on purpose. When something goes wrong with your data I need
+   to be able to ask you to run one line in the console rather than
+   guess — and the Diagnostics card reads the same objects. */
+window.Sid = { S, B, L, exportBackup, diagnose: () => S.diagnose(), __putSnap: (r) => L.putSnapshotRaw(r) };
+
+window.addEventListener('sid-health', paintHealth);
+window.addEventListener('sid-storage-problem', paintHealth);
+setInterval(paintHealth, 60000);
+
+$('#health-act')?.addEventListener('click', () => { if (exportBackup()) { toast('Backup downloaded'); paintHealth(); } });
+$('#health-x')?.addEventListener('click', () => { healthDismissed = $('#health-text').textContent; paintHealth(); });
 
 window.addEventListener('hashchange', route);
 

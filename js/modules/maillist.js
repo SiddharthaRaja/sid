@@ -11,6 +11,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, confirmDelete, todayISO, fmtDate, fmtNum, prose, download, daysBetween,
+  removeFrom
 } from '../ui.js';
 import { PROVIDERS, SOURCE_SEED, SEND_TEMPLATES, LIST_RULES } from '../data/maillist.js';
 import { fillTemplate } from '../data/templates.js';
@@ -101,7 +102,7 @@ export function renderMailList(sub) {
             h('div', { class: 'item-head' },
               h('span', { class: 'item-title mono', text: String(x.n) }),
               h('span', { class: 'small muted', text: fmtDate(x.date, { long: true }) }),
-              btn('Remove', () => { L.counts.splice(L.counts.indexOf(x), 1); S.touch('maillist'); draw(); }, { cls: 'btn-sm btn-ghost' })))))
+              btn('Remove', () => { removeFrom(L.counts, x); S.touch('maillist'); draw(); }, { cls: 'btn-sm btn-ghost' })))))
         : h('div', { class: 'small muted', text: 'Nothing logged yet.' }),
       field('Goal', L, 'goal', { slice: 'maillist', type: 'number', placeholder: '100' })));
 
@@ -190,17 +191,17 @@ It is also the only channel where you reach **everyone** who signed up, rather t
         title: isNew ? 'Log a send' : s.subject || 'Send',
         wide: true,
         body: h('div',
-          field('Subject', s, 'subject', { placeholder: 'Short. Lowercase is fine. No "Newsletter #4".' }),
-          field('What you sent', s, 'body', { multiline: true, tall: true }),
+          field('Subject', s, 'subject', { slice: 'maillist', placeholder: 'Short. Lowercase is fine. No "Newsletter #4".' }),
+          field('What you sent', s, 'body', { slice: 'maillist', multiline: true, tall: true }),
           h('div', { class: 'grid g4' },
-            field('Date', s, 'date', { type: 'date' }),
-            field('Sent to', s, 'sent', { type: 'number', onInput: paint }),
-            field('Opens', s, 'opens', { type: 'number', onInput: paint }),
-            field('Clicks', s, 'clicks', { type: 'number', onInput: paint })),
+            field('Date', s, 'date', { slice: 'maillist', type: 'date' }),
+            field('Sent to', s, 'sent', { slice: 'maillist', type: 'number', onInput: paint }),
+            field('Opens', s, 'opens', { slice: 'maillist', type: 'number', onInput: paint }),
+            field('Clicks', s, 'clicks', { slice: 'maillist', type: 'number', onInput: paint })),
           stat,
-          field('Notes', s, 'notes', { multiline: true, placeholder: 'What you would do differently.' })),
+          field('Notes', s, 'notes', { slice: 'maillist', multiline: true, placeholder: 'What you would do differently.' })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { L.sends.splice(L.sends.indexOf(s), 1); S.touch('maillist'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(L.sends, s); S.touch('maillist'); draw(); } } : null,
           'spacer',
           { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && (s.subject || s.body)) L.sends.unshift(s); S.touch('maillist'); draw(); } },
         ].filter(Boolean),

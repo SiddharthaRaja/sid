@@ -9,6 +9,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, selectField, toast,
   todayISO, fmtDate, addDays, daysBetween, download, prose,
+  removeFrom
 } from '../ui.js';
 import { RUN_SEED, RUN_NOTES } from '../data/runsheet.js';
 import { progressBar } from './shared.js';
@@ -139,20 +140,21 @@ export function renderRunsheet() {
       title: isNew ? 'Add a step' : s.title || 'Step',
       body: h('div',
         h('div', { class: 'grid g3' },
-          selectField('When', s, 'day', [[-1, 'The night before'], [0, 'Release day'], [1, 'The morning after']]),
-          field('Time', s, 'at', { type: 'time' }),
-          field('Minutes', s, 'mins', { type: 'number' })),
-        field('What', s, 'title'),
-        field('Detail', s, 'detail', { multiline: true }),
-        field('Where', s, 'where', { placeholder: 'Instagram, Spotify for Artists…' })),
+          selectField('When', s, 'day', [[-1, 'The night before'], [0, 'Release day'], [1, 'The morning after']], { slice: 'runsheet' }),
+          field('Time', s, 'at', { slice: 'runsheet', type: 'time' }),
+          field('Minutes', s, 'mins', { slice: 'runsheet', type: 'number' })),
+        field('What', s, 'title', { slice: 'runsheet' }),
+        field('Detail', s, 'detail', { slice: 'runsheet', multiline: true }),
+        field('Where', s, 'where', { slice: 'runsheet', placeholder: 'Instagram, Spotify for Artists…' })),
       actions: [
         !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-          R.custom.splice(R.custom.indexOf(s), 1); delete R.done[s.id]; S.touch('runsheet'); draw();
+          removeFrom(R.custom, s); delete R.done[s.id]; S.touch('runsheet'); draw();
         } } : null,
         'spacer',
         { label: 'Save', cls: 'btn-primary', onClick: () => {
           s.day = Number(s.day);
-          if (isNew && s.title) R.custom.push(s);
+          if (isNew && !s.title) { toast('Give the step a name first — nothing has been lost', 3000); return false; }
+          if (isNew) R.custom.push(s);
           S.touch('runsheet'); draw();
         } },
       ].filter(Boolean),

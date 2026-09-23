@@ -8,6 +8,7 @@ import {
   h, $, $$, clear, uid, toast, modal, field, selectField, checkbox, btn, card, cardHead,
   empty, prose, fmtDate, tLabel, resolveDate, relativeDay, todayISO, confirmDelete, copy, move,
   addDays, daysBetween,
+  removeFrom
 } from '../ui.js';
 import { icon } from '../icons.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
@@ -490,7 +491,7 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
   const open = (item) => itemEditor({
     item, slice, type, pathHint,
     onSave: draw,
-    onDelete: () => { items.splice(items.indexOf(item), 1); S.touch(slice); draw(); },
+    onDelete: () => { removeFrom(items, item); S.touch(slice); draw(); },
   });
 
   const add = () => {

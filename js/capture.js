@@ -12,9 +12,13 @@ import { h, clear, $, btn, modal, toast, uid, field } from './ui.js';
 import { icon } from './icons.js';
 
 function push(item) {
+  if (!S.isReady()) {
+    toast('Still loading your data — try again in a moment', 3000);
+    return null;
+  }
   const st = S.get('inbox');
   st.items = st.items || [];
-  st.items.unshift({
+  const rec = {
     id: uid(),
     at: new Date().toISOString(),
     title: item.title || '',
@@ -22,8 +26,10 @@ function push(item) {
     url: item.url || '',
     files: item.files || [],
     filed: false,
-  });
+  };
+  st.items.unshift(rec);
   S.touch('inbox');
+  return rec;
 }
 
 /* ---------------------------------------------------------- */
@@ -33,6 +39,14 @@ function push(item) {
 export function captureSheet(prefill = {}) {
   const item = { text: prefill.text || '', title: prefill.title || '', url: prefill.url || '' };
   const files = [];
+
+  /* An upload that finishes AFTER you tap Save lands in this same
+     array — which is by then the saved item's own `files` array — but
+     nothing told the store about it, so the attachment was gone on
+     refresh. Record a voice note, tap Save, and the audio vanished.
+     Now every completed upload persists, whenever it arrives. */
+  let saved = null;
+  const noteAttachments = () => { if (saved) S.touch('inbox'); };
   const shelf = h('div', { class: 'row', style: { flexWrap: 'wrap' } });
 
   const ta = h('textarea', {
@@ -48,6 +62,7 @@ export function captureSheet(prefill = {}) {
       shelf.append(chip);
       try {
         files.push(await B.uploadMedia(f, 'inbox'));
+        noteAttachments();
         chip.textContent = f.name;
       } catch (err) {
         chip.textContent = `${f.name} — ${err.message}`;
@@ -84,9 +99,12 @@ export function captureSheet(prefill = {}) {
     actions: [
       { label: 'Cancel' },
       { label: 'Save', cls: 'btn-primary', onClick: () => {
+        const wasRecording = rec.active?.();
         rec.stop();
-        if (!item.text.trim() && !files.length) return;
-        push({ ...item, files });
+        /* Save if a recording was still running: its audio arrives a
+           moment from now and needs an item to land in. */
+        if (!item.text.trim() && !files.length && !wasRecording) return;
+        saved = push({ ...item, files });
         toast('Saved to the Inbox');
       } },
     ],
@@ -127,8 +145,36 @@ function recorderControl(files, shelf) {
         shelf.append(chip);
         try {
           files.push(await B.uploadMedia(new File([blob], name, { type: blob.type }), 'inbox'));
+          noteAttachments();
           chip.textContent = `${name} · ${secs}s`;
-        } catch (err) { chip.textContent = err.message; chip.style.color = 'var(--warn)'; }
+        } catch (err) {
+          /* The recording used to be dropped here — the only copy, gone
+             because an upload failed. Keep it and give it back. */
+          chip.textContent = `${name} — upload failed`;
+          chip.style.color = 'var(--warn)';
+          const save = h('button', { class: 'btn btn-sm btn-ghost', style: { marginLeft: '6px' },
+            text: 'Save the audio to my device',
+            onClick: () => {
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = name;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            } });
+          const retry = h('button', { class: 'btn btn-sm', style: { marginLeft: '6px' },
+            text: 'Retry upload',
+            onClick: async () => {
+              retry.disabled = true; retry.textContent = 'uploading…';
+              try {
+                files.push(await B.uploadMedia(new File([blob], name, { type: blob.type }), 'inbox'));
+                noteAttachments();
+                chip.textContent = `${name} · ${secs}s`;
+                save.remove(); retry.remove();
+              } catch (e2) { retry.disabled = false; retry.textContent = 'Retry upload'; }
+            } });
+          shelf.append(save, retry);
+          toast('That recording did not upload — it is still here, save it or retry', 6000);
+        }
       };
       mr.start();
       secs = 0;
@@ -140,8 +186,9 @@ function recorderControl(files, shelf) {
     }
   }
   function stop() { if (mr && mr.state === 'recording') mr.stop(); }
+  const active = () => !!(mr && mr.state === 'recording');
 
-  return { el, stop };
+  return { el, stop, active };
 }
 
 /* ---------------------------------------------------------- */

@@ -8,6 +8,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, stat,
   fmtDate, resolveDate, tLabel, relativeDay, todayISO, confirmDelete, toast, download,
+  removeFrom
 } from '../ui.js';
 import { ASSETS_SEED, ASSET_CATEGORIES, ASSETS_INFO } from '../data/assets.js';
 import { infoPanel, notesPanel, progressBar, scheduleRow, mediaBlock } from './shared.js';
@@ -207,7 +208,7 @@ export function renderAssets(sub) {
           mediaBlock(a, 'assets', 'assets'))),
       actions: [
         { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => {
-          st.items.splice(st.items.indexOf(a), 1); S.touch('assets'); draw(); } },
+          removeFrom(st.items, a); S.touch('assets'); draw(); } },
         'spacer',
         { label: 'Done', cls: 'btn-primary', onClick: draw },
       ],

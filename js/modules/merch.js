@@ -10,6 +10,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   toast, copy, confirmDelete, todayISO, fmtDate, fmtNum, prose,
+  removeFrom
 } from '../ui.js';
 import { ROUTES, COST_SEED, SIZE_CURVE, MERCH_RULES } from '../data/merch.js';
 
@@ -210,19 +211,20 @@ export function renderMerch(sub) {
         wide: true,
         body: h('div',
           h('div', { class: 'grid g2' },
-            field('Name', v, 'name'),
-            selectField('What they do', v, 'kind', ROUTES.map(r => [r.key, r.name])),
-            field('Area', v, 'area', { placeholder: 'Balanagar, Begum Bazaar…' }),
-            field('Contact', v, 'contact', { placeholder: 'phone / WhatsApp' }),
-            field('MOQ', v, 'moq', { placeholder: 'minimum order' }),
-            field('Quote', v, 'quote', { placeholder: '₹ per unit at that MOQ' }),
-            selectField('Sample', v, 'sample', ['not ordered', 'ordered', 'arrived', 'washed twice', 'rejected']),
-            selectField('Verdict', v, 'rating', ['', 'use them', 'backup', 'no'])),
-          field('Notes', v, 'notes', { multiline: true, placeholder: 'What the print felt like. Whether they answered the phone.' })),
+            field('Name', v, 'name', { slice: 'merch' }),
+            selectField('What they do', v, 'kind', ROUTES.map(r => [r.key, r.name]), { slice: 'merch' }),
+            field('Area', v, 'area', { slice: 'merch', placeholder: 'Balanagar, Begum Bazaar…' }),
+            field('Contact', v, 'contact', { slice: 'merch', placeholder: 'phone / WhatsApp' }),
+            field('MOQ', v, 'moq', { slice: 'merch', placeholder: 'minimum order' }),
+            field('Quote', v, 'quote', { slice: 'merch', placeholder: '₹ per unit at that MOQ' }),
+            selectField('Sample', v, 'sample', ['not ordered', 'ordered', 'arrived', 'washed twice', 'rejected'], { slice: 'merch' }),
+            selectField('Verdict', v, 'rating', ['', 'use them', 'backup', 'no'], { slice: 'merch' })),
+          field('Notes', v, 'notes', { slice: 'merch', multiline: true, placeholder: 'What the print felt like. Whether they answered the phone.' })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { m.vendors.splice(m.vendors.indexOf(v), 1); S.touch('merch'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(m.vendors, v); S.touch('merch'); draw(); } } : null,
           'spacer',
-          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && v.name) m.vendors.push(v); S.touch('merch'); draw(); } },
+          { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && !v.name) { toast('Give the vendor a name first — nothing has been lost', 3000); return false; }
+            if (isNew) m.vendors.push(v); S.touch('merch'); draw(); } },
         ].filter(Boolean),
       });
     };
@@ -289,13 +291,13 @@ export function renderMerch(sub) {
         title: isNew ? 'Log a pre-order' : o.who || 'Pre-order',
         body: h('div',
           h('div', { class: 'grid g2' },
-            field('Who', o, 'who'),
-            selectField('Size', o, 'size', SIZE_CURVE.map(([s]) => s)),
-            field('Quantity', o, 'qty', { type: 'number' }),
-            selectField('Paid', o, 'paid', [[false, 'not yet'], [true, 'paid']])),
-          field('Where it ships', o, 'addr', { multiline: true })),
+            field('Who', o, 'who', { slice: 'merch' }),
+            selectField('Size', o, 'size', SIZE_CURVE.map(([s]) => s), { slice: 'merch' }),
+            field('Quantity', o, 'qty', { slice: 'merch', type: 'number' }),
+            selectField('Paid', o, 'paid', [[false, 'not yet'], [true, 'paid']], { slice: 'merch' })),
+          field('Where it ships', o, 'addr', { slice: 'merch', multiline: true })),
         actions: [
-          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { m.preorders.splice(m.preorders.indexOf(o), 1); S.touch('merch'); draw(); } } : null,
+          !isNew ? { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(m.preorders, o); S.touch('merch'); draw(); } } : null,
           'spacer',
           { label: 'Save', cls: 'btn-primary', onClick: () => { if (isNew && o.who) m.preorders.push(o); S.touch('merch'); draw(); } },
         ].filter(Boolean),

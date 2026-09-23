@@ -8,6 +8,7 @@ import * as S from '../store.js';
 import {
   h, clear, btn, card, cardHead, empty, stat, toast, copy, confirmDelete,
   fmtDate, tLabel, resolveDate, relativeDay, todayISO, addDays, daysBetween, uid,
+  removeFrom
 } from '../ui.js';
 import { PLATFORMS, PLATFORM_MAP } from '../data/platforms.js';
 import { icon, PCOLORS } from '../icons.js';
@@ -223,7 +224,7 @@ export function renderQueue(sub, opts = {}) {
       onSave: draw,
       onDelete: () => {
         const arr = S.get(slice).content[type.key];
-        arr.splice(arr.indexOf(item), 1);
+        removeFrom(arr, item);
         S.touch(slice); draw();
       },
     });

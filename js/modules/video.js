@@ -7,6 +7,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   fmtDate, resolveDate, relativeDay, todayISO, confirmDelete, toast, move, prose,
+  removeFrom
 } from '../ui.js';
 import { mediaBlock, notesPanel, infoPanel, checklist, progressBar, scheduleRow } from './shared.js';
 import { icon } from '../icons.js';
@@ -87,7 +88,7 @@ export function renderVideo(sub) {
       card(
         cardHead('This schedule',
           btn('Delete schedule', () => confirmDelete(`"${sc.name}"`, () => {
-            st.schedules.splice(st.schedules.indexOf(sc), 1); S.touch('video'); draw();
+            removeFrom(st.schedules, sc); S.touch('video'); draw();
           }), { cls: 'btn-sm btn-danger btn-ghost' })),
         field('Name', sc, 'name', { slice: 'video', onInput: () => {} }),
         scheduleRow(sc, 'video', () => draw(), { key: 'date', label: 'Shoot date' }),

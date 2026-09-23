@@ -766,6 +766,12 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line);
 .fab:active{transform:scale(.95)}
 .fab svg{width:22px;height:22px}
 body.kb-open .fab{display:none}
+/* Quick capture is hidden until your data has finished loading.
+   It used to be live on the sign-in screen, so a lyric typed there was
+   written into an unowned bucket and dropped the moment you signed
+   in — after the app had said "Saved to the Inbox". */
+.fab{display:none}
+body[data-ready] .fab{display:grid}
 
 /* rows you can flick */
 .swipeable{position:relative;overflow:hidden;touch-action:pan-y}
@@ -897,3 +903,36 @@ pre.pb-code{
   border-radius:var(--r);padding:12px 12px 12px 14px;
 }
 .pb-copy{display:flex;justify-content:flex-end;margin-top:4px}
+
+/* ---------- storage health banner ----------
+   Shown when saving to the cloud is not working. The whole point is
+   that it is impossible to miss: the failure that lost three hours of
+   writing was silent, and silence is the bug. */
+.health{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px; margin:0;
+  background:var(--warn-bg,#3a2a12); color:var(--warn-fg,#ffd9a0);
+  border-bottom:1px solid rgba(255,255,255,.12);
+  font-size:13px; line-height:1.4;
+}
+.health[data-level="bad"]{ background:#4a1d1d; color:#ffc9c9; }
+.health-text{ flex:1; min-width:0; }
+.health-act{
+  flex:none; cursor:pointer; white-space:nowrap;
+  background:rgba(255,255,255,.14); color:inherit;
+  border:1px solid rgba(255,255,255,.22); border-radius:7px;
+  padding:5px 10px; font-size:12px; font-weight:500;
+}
+.health-act:hover{ background:rgba(255,255,255,.22); }
+.health-x{
+  flex:none; cursor:pointer; background:none; border:0; color:inherit;
+  font-size:20px; line-height:1; padding:0 4px; opacity:.7;
+}
+.health-x:hover{ opacity:1; }
+
+/* a destructive button waiting for its second tap */
+.btn-danger[data-armed]{
+  background:var(--danger,#d33) !important;
+  color:#fff !important;
+  border-color:var(--danger,#d33) !important;
+}

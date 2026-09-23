@@ -65,10 +65,36 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
   const foot = h('div', { class: 'modal-foot' });
   actions.forEach(a => {
     if (a === 'spacer') { foot.append(h('div', { class: 'spacer' })); return; }
-    foot.append(h('button', {
+
+    /* Destructive actions need a second tap.
+
+       Every editor sheet in the app puts Delete in the same row as
+       Done, a thumb's width apart, with no dialog and no undo. On a
+       phone that is one mis-tap between a caption you have been
+       writing all morning and nothing. Opt out with `confirm: false`
+       (the confirmation dialog's own Delete button does). */
+    const danger = /btn-danger/.test(a.cls || '') && a.confirm !== false;
+    let armed = false;
+    let disarm = null;
+
+    const el = h('button', {
       class: `btn ${a.cls || ''}`,
-      onClick: () => { const r = a.onClick?.(close); if (r !== false && !a.keepOpen) close(); },
-    }, a.label));
+      onClick: () => {
+        if (danger && !armed) {
+          armed = true;
+          el.dataset.armed = '1';
+          el.textContent = 'Tap again to delete';
+          disarm = setTimeout(() => {
+            armed = false; delete el.dataset.armed; el.textContent = a.label;
+          }, 4000);
+          return;
+        }
+        clearTimeout(disarm);
+        const r = a.onClick?.(close);
+        if (r !== false && !a.keepOpen) close();
+      },
+    }, a.label);
+    foot.append(el);
   });
 
   const box = h('div', { class: `modal ${wide ? 'wide' : ''}` },
@@ -90,7 +116,7 @@ export function confirmDelete(what, onYes) {
     body: h('p', { class: 'muted small', text: 'This cannot be undone — though a snapshot from earlier today can be restored in Settings.' }),
     actions: [
       { label: 'Cancel' },
-      { label: 'Delete', cls: 'btn-danger', onClick: onYes },
+      { label: 'Delete', cls: 'btn-danger', confirm: false, onClick: onYes },
     ],
   });
 }
@@ -330,4 +356,25 @@ export function download(name, content, type = 'application/json') {
 export function move(arr, from, to) {
   if (to < 0 || to >= arr.length) return;
   arr.splice(to, 0, arr.splice(from, 1)[0]);
+}
+
+/**
+ * Remove one item from an array by identity.
+ *
+ * `arr.splice(arr.indexOf(x), 1)` is a trap: when the item is not in
+ * the array, indexOf returns -1 and splice(-1, 1) deletes the LAST
+ * record instead. The item can be missing whenever the array was
+ * rebuilt underneath you — a sync from another device, a re-render
+ * between the click and the handler — so deleting one thing quietly
+ * deletes a different thing. Returns true if something was removed.
+ */
+export function removeFrom(arr, item) {
+  if (!Array.isArray(arr)) return false;
+  let i = arr.indexOf(item);
+  if (i < 0 && item && typeof item === 'object' && item.id != null) {
+    i = arr.findIndex(x => x && typeof x === 'object' && x.id === item.id);
+  }
+  if (i < 0) { console.warn('removeFrom: item was not in the array; nothing deleted'); return false; }
+  arr.splice(i, 1);
+  return true;
 }

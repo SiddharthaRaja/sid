@@ -7,6 +7,7 @@ import * as S from '../store.js';
 import {
   h, clear, uid, btn, card, cardHead, empty, field, modal, subtabs, selectField,
   fmtDate, resolveDate, tLabel, todayISO, confirmDelete, copy,
+  removeFrom
 } from '../ui.js';
 import { REGISTRATIONS_SEED, COUNTRY_COPYRIGHT, RIGHTS_INFO } from '../data/rights.js';
 import { infoPanel, notesPanel, progressBar, scheduleRow } from './shared.js';
@@ -160,7 +161,7 @@ export function renderRights(sub) {
         field('URL', r, 'url', { slice: 'rights' }),
         field('Note', r, 'note', { slice: 'rights', multiline: true })),
       actions: [
-        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { st.registrations.splice(st.registrations.indexOf(r), 1); S.touch('rights'); redraw(); } },
+        { label: 'Delete', cls: 'btn-danger btn-ghost', onClick: () => { removeFrom(st.registrations, r); S.touch('rights'); redraw(); } },
         'spacer', { label: 'Done', cls: 'btn-primary', onClick: redraw },
       ],
       onClose: redraw,

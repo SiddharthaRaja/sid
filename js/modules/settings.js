@@ -5,6 +5,9 @@
 
 import * as S from '../store.js';
 import * as B from '../backend.js';
+import * as L from '../local.js';
+import * as J from '../journal.js';
+import * as F from '../filebackup.js';
 import { calendarExportModal } from './calexport.js';
 import {
   h, clear, btn, card, cardHead, empty, field, modal, subtabs, selectField, toast,
@@ -125,7 +128,7 @@ export function renderSettings(sub) {
     const blurb = {
       drive: 'Uploads go into a "Sid uploads" folder in your own Google Drive, using a permission that only lets the app see files it created — it cannot read anything else in there. Free, no card, counts against your 15GB. The permission lasts about an hour; after that the first upload of a session flashes a Google window for a moment.',
       firebase: 'Firebase Storage is seamless once on, but projects created after late 2024 need the Blaze pay-as-you-go plan, which needs a card even though the free allowance would cover you.',
-      local: 'Files are kept in this browser as data, under 1.6 MB each. Instant and private, but they do not reach your phone and they go if you clear site data.',
+      local: 'Files are kept in this browser as data, under 500 KB each — they are stored inside your data, so anything larger would stop that section syncing. Instant and private, but they do not reach your phone and they go if you clear site data.',
     }[mode];
 
     const card_ = card(
@@ -276,57 +279,425 @@ export function renderSettings(sub) {
     box.append(card(
       cardHead('How your data is kept'),
       h('ul', { class: 'prose' },
-        h('li', { text: 'Every edit is written about half a second after you stop typing — not when you leave the page.' }),
-        h('li', { text: 'Anything unsaved is also flushed the moment the tab is hidden, closed, or loses focus.' }),
-        h('li', { text: 'A sweep runs every 5 seconds as a backstop in case a save was missed.' }),
+        h('li', { text: 'Every edit is written to this device within about a sixth of a second — synchronously, so it has already happened before anything else is attempted.' }),
+        h('li', { text: 'It is written to this device again, synchronously, the instant the tab is hidden, closed or loses focus.' }),
+        h('li', { text: 'Only then is it sent to the cloud. The cloud is sync, not storage: if it stalls, your work is already safe here and a banner tells you so.' }),
+        h('li', { text: 'A cloud save that has not been acknowledged in 15 seconds is treated as failed and retried, instead of hanging forever.' }),
+        h('li', { text: 'If a section could not be read from the cloud at startup, it is never written back — so a half-loaded app can never overwrite real data with blanks.' }),
         h('li', { text: B.MODE === 'firebase'
           ? 'Offline edits queue on the device and replay automatically when you reconnect.'
-          : 'Local mode: data lives in this browser only. Export regularly, or add Firebase keys.' }),
-        h('li', { text: 'A full point-in-time snapshot is taken every time you open the app, and every 10 minutes of active work. The last 40 are kept and any one can be restored.' }))));
+          : 'Local mode: data lives on this device only. Download a backup regularly, or add Firebase keys.' }),
+        h('li', { text: 'Full snapshots are taken on this device AND in the cloud — every time you open the app, and every 5 minutes of active work. Everything from the last two days is kept, then one a day for a month, then one a week.' }))));
 
     box.append(card(
       cardHead('Snapshots',
         btn('Take one now', async () => {
-          try { await S.snapshotNow('manual'); toast('Snapshot saved'); draw(); }
-          catch (e) { toast('Snapshot failed: ' + e.message, 3500); }
+          try {
+            const r = await S.snapshotNow('manual');
+            toast(
+              r.localErr ? 'Could not save on this device: ' + r.localErr
+              : r.cloudErr ? 'Saved on this device. Cloud copy: ' + r.cloudErr
+              : 'Snapshot saved here and in the cloud', 4500);
+            draw();
+          }
+          catch (e) { toast('Snapshot failed: ' + (e.message || e), 4000); }
         }, { cls: 'btn-sm btn-primary' })),
+      h('p', { class: 'small muted' }, 'Snapshots on this device survive anything that goes wrong with the cloud or the account. Cloud snapshots survive anything that goes wrong with this device. Keep both.'),
       h('div', { id: 'snap-list' }, h('div', { class: 'small muted', text: 'loading…' }))));
 
-    B.listSnapshots().then(list => {
+    /* This used to be `.catch(() => {})`, which rendered an empty list
+       when the read FAILED — so "your backups are unreachable" and
+       "you have no backups" looked exactly the same. They are not the
+       same, and the difference matters most on the worst day. */
+    S.listSnapshots().then(({ rows, errors }) => {
       const el = box.querySelector('#snap-list');
       if (!el) return;
       clear(el);
-      if (!list.length) { el.append(h('div', { class: 'small muted', text: 'No snapshots yet.' })); return; }
-      el.append(h('div', { class: 'list' }, list.map(s => h('div', { class: 'item' },
+      errors.forEach(msg => el.append(h('div', { class: 'small', style: { color: 'var(--danger,#f66)' },
+        text: 'Could not read snapshots — ' + msg })));
+      if (!rows.length) {
+        el.append(h('div', { class: 'small muted',
+          text: errors.length ? 'None could be listed. That is a read failure, not proof there are none.' : 'No snapshots yet.' }));
+        return;
+      }
+      el.append(h('div', { class: 'list' }, rows.map(s => h('div', { class: 'item' },
         h('div', { class: 'item-head' },
           h('span', { class: 'item-title mono', text: new Date(s.at).toLocaleString() }),
           h('span', { class: 'tag', text: s.label }),
-          btn('Restore', () => confirmRestore(s.at), { cls: 'btn-sm btn-ghost' }))))));
-    }).catch(() => {});
+          h('span', { class: 'tag', text: s.where === 'cloud' ? 'cloud' : 'this device' }),
+          s.ns && s.ns !== L.namespace() ? h('span', { class: 'tag', text: 'other sign-in' }) : null,
+          btn('Restore', () => confirmRestore(s.key || s.at, s.where, s.at), { cls: 'btn-sm btn-ghost' }),
+          btn('Download', () => downloadSnapshot(s), { cls: 'btn-sm btn-ghost' }))))));
+    }).catch(e => {
+      const el = box.querySelector('#snap-list');
+      if (el) { clear(el); el.append(h('div', { class: 'small', style: { color: 'var(--danger,#f66)' }, text: String(e.message || e) })); }
+    });
 
+    const since = L.daysSinceExport();
     box.append(card(
       cardHead('Export & import'),
-      h('p', { class: 'small muted' }, 'A full JSON copy of everything — keep one in your Drive folder alongside the release plan.'),
+      h('p', { class: 'small muted' }, 'A JSON file on your own computer is the only copy that no outage, no account mix-up and no bug of mine can reach. Keep one.'),
+      h('p', { class: 'small muted' }, 'It holds every section of the app. It does NOT hold your Svara recordings — audio is far too large for a JSON file, so those have their own button below.'),
+      h('p', { class: 'small', style: { color: since > 7 ? 'var(--danger,#f66)' : 'inherit' },
+        text: L.lastExport()
+          ? `Last download: ${new Date(L.lastExport()).toLocaleString()} (${Math.floor(since)} day${Math.floor(since) === 1 ? '' : 's'} ago).`
+          : 'You have never downloaded one.' }),
       h('div', { class: 'row' },
         btn('Download everything', async () => {
-          await S.flushAll();
+          try { await S.flushAll(); } catch {}
           download(`sid-backup-${todayISO()}.json`, JSON.stringify(S.everything(), null, 2));
-        }, { cls: 'btn-sm' }),
+          L.markExported();
+          toast('Backup downloaded');
+          draw();
+        }, { cls: 'btn-sm btn-primary' }),
         btn('Import a backup', importBackup, { cls: 'btn-sm' }))));
+
+    box.append(fileBackupCard());
+    box.append(journalCard());
+    box.append(takesCard());
+    box.append(stuckCard());
+    box.append(otherAccountsCard());
+    box.append(diagnosticsCard());
 
     return box;
   }
 
-  function confirmRestore(at) {
+  /* The app looking empty and your work being gone are two different
+     things, and until now they looked identical. If another Google
+     account on this device has data, say so — loudly — instead of
+     letting an empty screen speak for itself. */
+  function otherAccountsCard() {
+    const mine = L.namespace();
+    const others = L.namespaceSummary().filter(r => r.ns !== mine && r.sections > 0);
+    if (!others.length) return h('span', { hidden: true });
+
+    const kb = (n) => (n / 1024).toFixed(0) + ' KB';
+    return card(
+      cardHead('Data from another sign-in on this device'),
+      h('p', { class: 'small' },
+        'This device also holds data saved under ' + (others.length === 1 ? 'a different account' : others.length + ' other accounts') +
+        '. If the app looks emptier than it should, you are probably signed into the wrong one — nothing has been lost, and none of it has been touched.'),
+      h('p', { class: 'small muted' },
+        'The safest move is to sign out and back in with the right Google account. Download it first if you want a copy either way.'),
+      h('div', { class: 'list' }, others.map(r => h('div', { class: 'item' },
+        h('div', { class: 'item-head' },
+          h('span', { class: 'item-title mono', text: r.ns.slice(0, 12) + '…' }),
+          h('span', { class: 'tag', text: `${r.sections} sections · ${kb(r.bytes)}` }),
+          h('span', { class: 'tag', text: r.newest ? new Date(r.newest).toLocaleString() : 'no date' }),
+          btn('Download it', async () => {
+            try {
+              const data = await L.readNamespace(r.ns);
+              download(`sid-other-account-${r.ns.slice(0, 8)}-${todayISO()}.json`, JSON.stringify(data, null, 2));
+              toast('Downloaded — import it after signing into the right account');
+            } catch (e) { toast('Could not read it: ' + (e.message || e), 4000); }
+          }, { cls: 'btn-sm btn-ghost' }))))));
+  }
+
+  /* Recordings live only on this device, in IndexedDB. Clearing site
+     data takes them with it, and the JSON backup cannot hold them — so
+     there has to be a way to get them all off in one go. */
+  function takesCard() {
+    const out = h('div', { class: 'small muted', style: { marginTop: '8px' }, text: 'checking…' });
+    const c = card(
+      cardHead('Svara recordings',
+        btn('Download them all', async (e) => {
+          const b = e.target.closest('button');
+          b.disabled = true;
+          try {
+            const REC = await import('../svara/record.js');
+            const takes = await REC.listTakes();
+            if (!takes.length) { toast('No recordings on this device'); b.disabled = false; return; }
+            let n = 0;
+            for (const t of takes) {
+              b.textContent = `saving ${++n} of ${takes.length}…`;
+              const full = await REC.getTake(t.id);
+              if (!full || !full.samples) continue;
+              const wav = REC.encodeWav(full.samples, full.sampleRate);
+              const name = `${String(full.name || 'take').replace(/[^\w.-]+/g, '-')}-${new Date(full.at).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.wav`;
+              const url = URL.createObjectURL(wav);
+              const a = document.createElement('a');
+              a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+              /* One at a time, and let the blob go: ten three-minute
+                 takes held at once is enough to get the tab killed. */
+              await new Promise(r => setTimeout(r, 400));
+              URL.revokeObjectURL(url);
+            }
+            toast(`${takes.length} recording${takes.length > 1 ? 's' : ''} downloaded`, 4000);
+          } catch (err) { toast('Could not export: ' + (err.message || err), 5000); }
+          b.disabled = false; b.textContent = 'Download them all';
+        }, { cls: 'btn-sm btn-primary' })),
+      h('p', { class: 'small muted' },
+        'Recordings are on this device only — they are not in Firestore, not in a snapshot, and not in the JSON backup. If you clear site data or lose the device, they go with it.'),
+      out);
+
+    (async () => {
+      try {
+        const REC = await import('../svara/record.js');
+        const takes = await REC.listTakes();
+        const u = await REC.usage();
+        const mb = (n) => (n / 1048576).toFixed(0);
+        out.textContent = takes.length
+          ? `${takes.length} recording${takes.length > 1 ? 's' : ''} here · about ${mb(u.used)} MB used of ${mb(u.quota)} MB the browser allows.`
+          : 'No recordings on this device yet.';
+        if (u.quota && u.used / u.quota > 0.8) {
+          out.style.color = 'var(--danger,#f66)';
+          out.textContent += ' Storage is nearly full — download them and delete some.';
+        }
+      } catch (e) { out.textContent = 'Could not read the recording store: ' + (e.message || e); }
+    })();
+
+    return c;
+  }
+
+  /* When a save has permanently stopped, say so here with a way to
+     retry, rather than leaving it to a banner the user may dismiss. */
+  function stuckCard() {
+    const st = S.health;
+    if (st.cloud !== 'stuck' && !(st.stuck && st.stuck.length)) return h('span', { hidden: true });
+    return card(
+      cardHead('Some sections are not reaching the cloud',
+        btn('Try again', () => { const n = S.retryStuck(); toast(n ? `Retrying ${n} section${n > 1 ? 's' : ''}` : 'Nothing to retry'); draw(); }, { cls: 'btn-sm btn-primary' })),
+      h('p', { class: 'small', style: { color: 'var(--danger,#f66)' }, text: st.detail }),
+      h('p', { class: 'small muted' }, 'Everything is still saved on this device, and nothing already in the cloud has been damaged. Download a backup before you use Sid on another device.'),
+      h('div', { class: 'list' }, (st.stuck || []).map(id => h('div', { class: 'item' },
+        h('div', { class: 'item-head' }, h('span', { class: 'item-title mono', text: id }))))));
+  }
+
+  /* A real file on the computer, rewritten in the background. The only
+     layer that survives clearing the site's data. */
+  function fileBackupCard() {
+    const st = F.status();
+    const line = h('div', { class: 'small', style: { marginTop: '8px' } });
+
+    const paint = () => {
+      const now = F.status();
+      line.textContent = now.error ? now.error
+        : now.connected ? `Connected — writing to "${now.name}"${now.lastWrite ? `, last at ${new Date(now.lastWrite).toLocaleTimeString()}` : ' (first write on the next snapshot)'}.`
+        : 'Not connected.';
+      line.style.color = now.error ? 'var(--danger,#f66)' : now.connected ? 'var(--ok)' : 'var(--fg-3)';
+    };
+
+    if (!st.supported) {
+      return card(
+        cardHead('A live backup file', h('span', { class: 'tag', text: 'desktop only' })),
+        h('p', { class: 'small muted' },
+          'On a desktop browser Sid can keep one ordinary file on your computer up to date automatically — chosen once, rewritten in the background, outside the browser\'s storage entirely. This browser does not support it, so on this device the Download button above is the equivalent.'));
+    }
+
+    const c = card(
+      cardHead('A live backup file',
+        btn(st.connected ? 'Choose a different file' : 'Choose a file', async (e) => {
+          const b = e.target.closest('button'); b.disabled = true;
+          try {
+            const name = await F.choose(`sid-backup-${todayISO()}.json`);
+            await F.write(S.everything());
+            toast(`Backing up to "${name}"`, 4000);
+            draw();
+          } catch (err) {
+            if (!/abort/i.test(String(err.message || err))) toast(String(err.message || err), 5000);
+          }
+          b.disabled = false;
+        }, { cls: 'btn-sm btn-primary' })),
+      h('p', { class: 'small muted' },
+        'Every other safety net lives inside this browser\'s storage for this site — the mirror, the snapshots, the journal below. Clearing site data takes all of them at once. This one does not: pick a file (your Drive folder is a good place) and Sid rewrites it every few minutes with everything in the app.'),
+      h('p', { class: 'small muted' },
+        'You choose the file once. There is no dialog after that, and no folder full of dated copies — it is one file, always current.'),
+      line);
+
+    if (st.supported && !st.connected && st.error) {
+      c.append(h('div', { class: 'row', style: { marginTop: '8px' } },
+        btn('Reconnect', async () => {
+          if (await F.reconnect()) { await F.write(S.everything()); toast('Reconnected'); draw(); }
+          else toast('Could not reconnect — choose the file again', 4000);
+        }, { cls: 'btn-sm' })));
+    }
+    if (st.connected) {
+      c.append(h('div', { class: 'row', style: { marginTop: '8px' } },
+        btn('Write it now', async () => {
+          const okNow = await F.write(S.everything());
+          toast(okNow ? 'Backup file updated' : 'Could not write: ' + F.status().error, 4500);
+          paint();
+        }, { cls: 'btn-sm' }),
+        btn('Stop using it', () => confirmDelete('the link to that backup file', async () => {
+          await F.forget(); toast('Stopped — the file itself is untouched'); draw();
+        }), { cls: 'btn-sm btn-ghost' })));
+    }
+    paint();
+    return c;
+  }
+
+  /* The append-only log. Never overwrites, so a bug in the layer above
+     cannot damage what it has already written. */
+  function journalCard() {
+    const out = h('div', { class: 'small muted', style: { marginTop: '8px' }, text: 'checking…' });
+    const listBox = h('div');
+
+    const c = card(
+      cardHead('Edit history on this device',
+        btn(J.enabled() ? 'Turn off' : 'Turn on', () => {
+          J.setEnabled(!J.enabled());
+          toast(J.enabled() ? 'Edit history on' : 'Edit history off — the other backups are unaffected');
+          draw();
+        }, { cls: 'btn-sm' })),
+      h('p', { class: 'small muted' },
+        'A running log of what each section looked like, kept in its own separate database. It only ever adds — nothing here is ever overwritten — so even if the saving code itself goes wrong, the history of what you typed is still readable. About one copy a minute per section while you are actively editing it.'),
+      h('p', { class: 'small muted' },
+        'This is belt and braces. If you stop wanting it, turn it off here — nothing else changes.'),
+      out, listBox);
+
+    const refresh = async () => {
+      try {
+        const st = await J.stats();
+        out.textContent = !J.enabled()
+          ? `Off. ${st.entries} entries are still stored from before.`
+          : st.entries
+            ? `${st.entries} entries across ${st.sections} sections, ${(st.bytes / 1048576).toFixed(1)} MB, from ${new Date(st.oldest).toLocaleString()} to ${new Date(st.newest).toLocaleString()}.`
+            : 'Nothing logged yet — it starts with your next edit.';
+        if (st.error) { out.textContent += ' Last error: ' + st.error; out.style.color = 'var(--danger,#f66)'; }
+      } catch (e) { out.textContent = 'Could not read the history: ' + (e.message || e); }
+    };
+
+    c.append(h('div', { class: 'row', style: { marginTop: '10px' } },
+      btn('Browse it', () => browseJournal(), { cls: 'btn-sm btn-primary' }),
+      btn('Download all of it', async (e) => {
+        const b = e.target.closest('button'); b.disabled = true; b.textContent = 'gathering…';
+        try {
+          const rows = await J.dump();
+          download(`sid-edit-history-${todayISO()}.json`, JSON.stringify(rows, null, 2));
+          toast(`${rows.length} entries downloaded`);
+        } catch (err) { toast('Could not export: ' + (err.message || err), 5000); }
+        b.disabled = false; b.textContent = 'Download all of it';
+      }, { cls: 'btn-sm' }),
+      btn('Clear it', () => confirmDelete('the whole edit history', async () => {
+        await J.clearAll(); toast('Edit history cleared'); draw();
+      }), { cls: 'btn-sm btn-ghost btn-danger' })));
+
+    refresh();
+    return c;
+  }
+
+  /* Browse the log and put one version of one section back. */
+  function browseJournal() {
+    const body = h('div', h('div', { class: 'small muted', text: 'loading…' }));
+    const m = modal({ title: 'Edit history', wide: true, body, actions: [{ label: 'Close' }] });
+
+    (async () => {
+      let rows = [];
+      try { rows = await J.list({ limit: 400 }); }
+      catch (e) { clear(body); body.append(h('p', { class: 'small', text: 'Could not read it: ' + (e.message || e) })); return; }
+      clear(body);
+      if (!rows.length) {
+        body.append(h('p', { class: 'small muted' }, 'Nothing logged yet. It fills up as you work.'));
+        return;
+      }
+      const sections = [...new Set(rows.map(r => r.id))].sort();
+      let filter = '';
+      const list = h('div', { class: 'list' });
+
+      const paint = () => {
+        clear(list);
+        rows.filter(r => !filter || r.id === filter).slice(0, 120).forEach(r => {
+          list.append(h('div', { class: 'item' },
+            h('div', { class: 'item-head' },
+              h('span', { class: 'item-title mono', text: new Date(r.at).toLocaleString() }),
+              h('span', { class: 'tag', text: r.id }),
+              r.label ? h('span', { class: 'tag', text: r.label }) : null,
+              h('span', { class: 'small muted', text: `${(r.bytes / 1024).toFixed(0)} KB` }),
+              btn('Look at it', async () => {
+                const v = await J.read(r.key);
+                modal({ title: `${r.id} — ${new Date(r.at).toLocaleString()}`, wide: true,
+                  body: h('pre', { class: 'mono small', style: { whiteSpace: 'pre-wrap', maxHeight: '60vh', overflow: 'auto' },
+                    text: JSON.stringify(v, null, 2) }),
+                  actions: [
+                    { label: 'Close' },
+                    { label: 'Download this one', onClick: () =>
+                        download(`sid-${r.id}-${new Date(r.at).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`,
+                          JSON.stringify(v, null, 2)) },
+                    { label: 'Put this version back', cls: 'btn-primary', onClick: async () => {
+                        try {
+                          await S.importAll({ [r.id]: v });
+                          toast(`"${r.id}" restored to its ${new Date(r.at).toLocaleTimeString()} version`, 4500);
+                          m.close();
+                        } catch (err) { toast(String(err.message || err), 5000); }
+                      } },
+                  ] });
+              }, { cls: 'btn-sm btn-ghost' }))));
+        });
+      };
+
+      body.append(
+        h('p', { class: 'small muted' },
+          'Every entry is a copy of one section at one moment. Putting one back replaces only that section, and takes a snapshot first — so it is reversible.'),
+        h('div', { class: 'row', style: { flexWrap: 'wrap', marginBottom: '10px' } },
+          btn('All sections', () => { filter = ''; paint(); }, { cls: 'btn-sm' }),
+          ...sections.map(id => btn(id, () => { filter = id; paint(); }, { cls: 'btn-sm btn-ghost' }))),
+        list);
+      paint();
+    })();
+  }
+
+  function downloadSnapshot(s) {
+    (s.where === 'cloud' ? B.readSnapshot(s.at) : L.readSnapshot(s.key || s.at))
+      .then(data => {
+        if (!data) { toast('That snapshot could not be read', 3000); return; }
+        download(`sid-snapshot-${s.at.replace(/[:.]/g, '-')}.json`, JSON.stringify(data, null, 2));
+      })
+      .catch(e => toast(String(e.message || e), 3500));
+  }
+
+  /* Everything I would ask you for if this went wrong again, on one
+     screen, copyable in one tap. */
+  function diagnosticsCard() {
+    const pre = h('pre', { class: 'mono small', style: { whiteSpace: 'pre-wrap', margin: 0 } }, 'gathering…');
+    const box = card(
+      cardHead('Diagnostics',
+        btn('Copy', () => { navigator.clipboard.writeText(pre.textContent).then(() => toast('Copied')); }, { cls: 'btn-sm btn-ghost' })),
+      h('p', { class: 'small muted' }, 'If data goes missing, send me this before doing anything else.'),
+      pre);
+
+    (async () => {
+      const d = S.diagnose();
+      const est = await L.estimate();
+      const u = B.user();
+      let snapCount = '?';
+      try { snapCount = (await L.listSnapshots()).length; } catch (e) { snapCount = 'error: ' + e.message; }
+      pre.textContent = JSON.stringify({
+        account: u?.email || '(none)',
+        uid: u?.uid || '(none)',
+        mode: B.MODE,
+        firestoreDegraded: B.degraded() ? B.degradedText() : false,
+        persistentStorage: await navigator.storage?.persisted?.().catch(() => null),
+        deviceSnapshots: snapCount,
+        quotaUsedMB: est ? +(est.usage / 1048576).toFixed(1) : null,
+        quotaMB: est ? +(est.quota / 1048576).toFixed(0) : null,
+        lastExport: L.lastExport() || '(never)',
+        ...d,
+      }, null, 2);
+    })().catch(e => { pre.textContent = String(e.message || e); });
+
+    return box;
+  }
+
+  function confirmRestore(key, where = 'device', at = key) {
     modal({
       title: 'Restore this snapshot?',
-      body: h('p', { class: 'small muted' },
-        'Everything currently in the app will be replaced by the version from ' +
-        new Date(at).toLocaleString() + '. A snapshot of the current state is taken first, so this is reversible.'),
-      actions: [{ label: 'Cancel' }, {
-        label: 'Restore', cls: 'btn-primary',
-        onClick: async () => { try { await S.restoreSnapshot(at); } catch (e) { toast(e.message, 3500); } },
-      }],
+      body: h('div', {},
+        h('p', { class: 'small muted' },
+          'Everything currently in the app will be replaced by the version from ' +
+          new Date(at).toLocaleString() + ` (${where === 'cloud' ? 'cloud copy' : 'this device'}).`),
+        h('p', { class: 'small muted' },
+          'A snapshot of the current state is taken first — on this device as well as in the cloud — so this is reversible either way.'),
+        h('p', { class: 'small' }, 'Download the current state first if you are unsure.')),
+      actions: [
+        { label: 'Cancel' },
+        { label: 'Download first', onClick: async () => {
+            try { await S.flushAll(); } catch {}
+            download(`sid-before-restore-${todayISO()}.json`, JSON.stringify(S.everything(), null, 2));
+            L.markExported();
+          } },
+        { label: 'Restore', cls: 'btn-primary',
+          onClick: async () => { try { await S.restoreSnapshot(key, where); } catch (e) { toast(e.message || String(e), 4000); } } },
+      ],
     });
   }
 
@@ -335,16 +706,35 @@ export function renderSettings(sub) {
       onChange: async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        try {
-          const data = JSON.parse(await f.text());
-          modal({
-            title: 'Import this backup?',
-            body: h('p', { class: 'small muted' }, `${Object.keys(data).length} sections found. This replaces everything currently in the app.`),
-            actions: [{ label: 'Cancel' }, { label: 'Import', cls: 'btn-primary', onClick: async () => {
-              await S.importAll(data); toast('Imported'); location.reload();
-            } }],
-          });
-        } catch { toast('That file is not a Sid backup', 3000); }
+        let data;
+        try { data = JSON.parse(await f.text()); }
+        catch { toast('That file is not valid JSON', 3000); return; }
+
+        const chk = S.inspectImport(data);
+        if (!chk.ok) { toast(chk.reason, 4000); return; }
+
+        modal({
+          title: 'Import this backup?',
+          body: h('div', {},
+            h('p', { class: 'small' }, `${chk.known.length} recognised sections will replace what is in the app now.`),
+            chk.empty.length ? h('p', { class: 'small', style: { color: 'var(--danger,#f66)' } },
+              `${chk.empty.length} of them are EMPTY in this file (${chk.empty.join(', ')}) — importing will empty them here too.`) : null,
+            chk.bad.length ? h('p', { class: 'small muted' }, `${chk.bad.length} malformed sections will be skipped.`) : null,
+            chk.unknown.length ? h('p', { class: 'small muted' }, `${chk.unknown.length} unrecognised keys will be ignored.`) : null,
+            h('p', { class: 'small muted' }, 'A snapshot of the current state is saved on this device first, so this is reversible.')),
+          actions: [
+            { label: 'Cancel' },
+            { label: 'Download current first', onClick: async () => {
+                try { await S.flushAll(); } catch {}
+                download(`sid-before-import-${todayISO()}.json`, JSON.stringify(S.everything(), null, 2));
+                L.markExported();
+              } },
+            { label: 'Import', cls: 'btn-primary', onClick: async () => {
+                try { await S.importAll(data); toast('Imported'); location.reload(); }
+                catch (err) { toast(String(err.message || err), 4000); }
+              } },
+          ],
+        });
       } });
     document.body.append(input); input.click(); input.remove();
   }
