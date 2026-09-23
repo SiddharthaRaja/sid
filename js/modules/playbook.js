@@ -180,6 +180,8 @@ function library() {
       class: 'item', style: { width: '100%', textAlign: 'left' },
       onClick: () => {
         st.open = hit.bk.id;
+        /* Which section to scroll to once the article is rendered —
+           it is one long page now, not a set of tabs. */
         st.sec = { ...(st.sec || {}), [hit.bk.id]: hit.si };
         save(); rerender();
       },
@@ -268,49 +270,57 @@ function reader(book) {
       save(); rerender();
     }, { cls: `btn-sm ${(st.read || {})[book.id] ? 'btn-ghost' : ''}` }));
 
-  const chips = h('div', { class: 'subtabs' });
+  /* One continuous article.
+
+     It used to be paged: a strip of section tabs, one section on
+     screen, and prev/next buttons at the bottom. For a reference
+     document you read straight through — and for the Instagram one,
+     1,600 lines of it — that turns reading into clicking. The whole
+     thing renders at once now; the strip becomes a jump list. */
+  const jump = h('div', { class: 'row', style: { flexWrap: 'wrap', marginBottom: '14px' } });
   const body = h('div');
-  const foot = h('div', { class: 'row', style: { marginTop: '16px' } });
 
-  box.append(head, chips, body, foot);
-
+  box.append(head, jump, body);
   body.append(h('div', { class: 'small muted', text: 'Loading…' }));
 
   load(book).then(doc => {
-    const pick = (i) => {
-      st.sec = { ...(st.sec || {}), [book.id]: i };
-      save();
-      draw(i);
-    };
+    clear(body);
+    clear(jump);
 
-    const draw = (i) => {
-      const sec = doc.sections[i];
-      clear(chips); clear(body); clear(foot);
+    body.append(h('div', { class: 'small muted', style: { marginBottom: '14px' },
+      text: `${doc.sections.length} sections · ${fmtNum(doc.words)} words · about ${doc.minutes} min to read` }));
 
-      doc.sections.forEach((s, si) => chips.append(h('button', {
-        class: `subtab ${si === i ? 'on' : ''}`,
-        onClick: () => pick(si),
-        text: chipLabel(s.title),
-      })));
+    doc.sections.forEach((sec, i) => {
+      const id = `pb-${book.id}-${i}`;
+      jump.append(h('button', {
+        class: 'chip', onClick: () => {
+          const el = document.getElementById(id);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+      }, chipLabel(sec.title)));
 
-      if (!sec) { body.append(empty('Empty section', '')); return; }
-
-      body.append(h('h2', { style: { margin: '14px 0 2px', fontSize: '17px' }, text: sec.title }));
-      body.append(h('div', { class: 'small muted', style: { marginBottom: '6px' },
-        text: `Section ${i + 1} of ${doc.sections.length} · ${fmtNum(doc.words)} words in this document · about ${doc.minutes} min to read all of it` }));
+      body.append(h('h2', {
+        id, class: 'pb-h',
+        style: { margin: i ? '34px 0 4px' : '0 0 4px', fontSize: '17px', scrollMarginTop: '64px' },
+        text: sec.title,
+      }));
       body.append(renderBody(sec.body));
+    });
 
-      if (i > 0) foot.append(btn('← ' + chipLabel(doc.sections[i - 1].title), () => {
-        pick(i - 1); window.scrollTo(0, 0);
-      }, { cls: 'btn-sm' }));
-      foot.append(h('div', { class: 'spacer' }));
-      if (i < doc.sections.length - 1) foot.append(btn(chipLabel(doc.sections[i + 1].title) + ' →', () => {
-        pick(i + 1); window.scrollTo(0, 0);
-      }, { cls: 'btn-sm btn-primary' }));
-    };
+    /* Back to the jump list without scrolling all the way up. */
+    body.append(h('div', { class: 'row', style: { marginTop: '28px' } },
+      btn('Back to the top', () => window.scrollTo({ top: 0, behavior: 'smooth' }), { cls: 'btn-sm' })));
 
-    const start = Math.min((st.sec || {})[book.id] || 0, doc.sections.length - 1);
-    draw(start);
+    /* Arrived from a search hit: go to that section. */
+    const want = (st.sec || {})[book.id];
+    if (want) {
+      setTimeout(() => {
+        document.getElementById(`pb-${book.id}-${want}`)?.scrollIntoView({ block: 'start' });
+      }, 60);
+      st.sec = { ...(st.sec || {}) };
+      delete st.sec[book.id];
+      save();
+    }
   }).catch(e => {
     clear(body);
     body.append(empty('That document would not load', String(e.message || e)),

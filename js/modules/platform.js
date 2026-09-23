@@ -8,7 +8,7 @@ import {
   h, clear, btn, card, cardHead, empty, field, subtabs, stat, fmtNum, uid,
   toast, prose, confirmDelete, todayISO, fmtDate,
 } from '../ui.js';
-import { icon, PCOLORS } from '../icons.js';
+// (the platform header that used these is gone — see renderPlatform)
 import { contentList, checklist, notesPanel, infoPanel, linkList } from './shared.js';
 import { INFO } from '../data/info.js';
 import { SMALL_PLATFORMS } from '../data/platforms.js';
@@ -35,20 +35,19 @@ export function renderPlatform(p, sub) {
   ];
   let active = tabs.some(t => t[0] === sub) ? sub : tabs[0][0];
 
-  let subEl = null;
-  const refreshHeader = () => {
-    if (!subEl) return;
-    const n = p.types.map(t => (store.content?.[t.key] || []).length).reduce((a, b) => a + b, 0);
-    const d = Object.values(store.setupDone || {}).filter(Boolean).length;
-    subEl.textContent = `${n} item${n === 1 ? '' : 's'} banked · setup ${d}/${p.setup.length}`;
-  };
+  /* Nothing to refresh: the counts used to live in a header that is
+     gone. Kept as a no-op so the panels that report changes do not
+     all need rewiring. */
+  const refreshHeader = () => {};
 
   const draw = () => {
     clear(root);
 
-    const head = header(p, store, slice);
-    subEl = head.querySelector('.sub');
-    root.append(head);
+    /* No page header here on purpose. It was a giant platform name
+       (already in the title bar above it), a count, and two fat input
+       boxes for the handle and profile URL — together half a phone
+       screen, every time, for two fields you set once. The tabs start
+       at the top instead, and the account fields moved into Setup. */
     root.append(subtabs(tabs, active, (k) => {
       active = k;
       history.replaceState(null, '', `#/p/${p.key}/${k}`);
@@ -77,40 +76,22 @@ export function renderPlatform(p, sub) {
   return root;
 }
 
-/* ---------- header ---------- */
-
-function header(p, store, slice) {
-  const counts = p.types.map(t => (store.content?.[t.key] || []).length).reduce((a, b) => a + b, 0);
-  const doneN = Object.values(store.setupDone || {}).filter(Boolean).length;
-
-  return h('div', { class: 'page-head' },
-    h('div', { class: 'row', style: { gap: '11px' } },
-      h('span', { html: icon(p.icon), style: { color: PCOLORS[p.key], transform: 'scale(1.5)', display: 'flex' } }),
-      h('div', {},
-        h('h1', { text: p.name }),
-        h('div', { class: 'sub', text: `${counts} item${counts === 1 ? '' : 's'} banked · setup ${doneN}/${p.setup.length}` }))),
-    h('div', { class: 'spacer' }),
-    h('div', { class: 'page-actions' },
-      h('input', {
-        class: 'inp', style: { maxWidth: '160px' }, placeholder: '@handle',
-        value: store.handle || '',
-        onInput: (e) => { store.handle = e.target.value; S.touch(slice); },
-      }),
-      store.profileUrl
-        ? h('a', { class: 'btn btn-sm', href: store.profileUrl, target: '_blank', rel: 'noopener' }, 'Open')
-        : null,
-      h('input', {
-        class: 'inp', style: { maxWidth: '190px' }, placeholder: 'profile URL',
-        value: store.profileUrl || '',
-        onInput: (e) => { store.profileUrl = e.target.value; S.touch(slice); },
-      })));
-}
-
 /* ---------- setup checklist ---------- */
 
 function setupPanel(p, store, slice, onChanged) {
   const box = h('div');
   store.setupDone = store.setupDone || {};
+
+  /* Your account on this platform. Two fields you fill in once, so
+     they belong here rather than across the top of every screen. */
+  box.append(card(
+    cardHead(`Your ${p.name} account`,
+      store.profileUrl
+        ? h('a', { class: 'btn btn-sm', href: store.profileUrl, target: '_blank', rel: 'noopener' }, 'Open it')
+        : null),
+    h('div', { class: 'grid g2' },
+      field('Handle', store, 'handle', { slice, placeholder: '@you' }),
+      field('Profile URL', store, 'profileUrl', { slice, placeholder: 'https://…' }))));
 
   box.append(card(
     cardHead('Profile setup'),

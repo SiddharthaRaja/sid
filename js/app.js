@@ -259,7 +259,7 @@ const ROUTES = {
   social:    { title: 'Social',             icon: 'instagram',  render: () => renderGroup('Social') },
   text:      { title: 'Text',               icon: 'x',          render: () => renderGroup('Text') },
   dsps:      { title: 'DSPs',               icon: 'spotify',    render: () => renderGroup('DSPs') },
-  more:      { title: 'More',               icon: 'more',       render: () => renderMoreGrid(MORE_GRID) },
+  more:      { title: 'More',               icon: 'more',       render: () => renderMoreGrid(MORE_GRID, route) },
   apps:      { title: 'Apps',               icon: 'notepad',    render: renderApps },
 
   /* the two guest apps, deliberately last and deliberately separate */

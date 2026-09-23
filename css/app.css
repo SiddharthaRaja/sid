@@ -1002,3 +1002,19 @@ pre.pb-code{
   .fab{ bottom:calc(68px + env(safe-area-inset-bottom)); z-index:39; }
   body.is-offline .fab{ bottom:calc(102px + env(safe-area-inset-bottom)); }
 }
+
+/* ---------- the star on a tile ----------
+   Sits in the corner of the tile and swallows the tap, so pinning
+   something never opens it by accident. */
+.tile-star{
+  position:absolute; top:8px; right:8px;
+  width:30px; height:30px; padding:0; line-height:1;
+  display:grid; place-items:center;
+  background:transparent; border:0; border-radius:8px;
+  color:var(--fg-3); font-size:16px; cursor:pointer;
+  opacity:.55; transition:opacity .12s, color .12s, background .12s;
+}
+.tile-star:hover{ opacity:1; background:color-mix(in srgb, currentColor 12%, transparent); }
+.tile-star.on{ color:var(--accent); opacity:1; }
+/* leave room so a long label never runs under the star */
+.tile:has(.tile-star) .tile-label{ padding-right:24px; }

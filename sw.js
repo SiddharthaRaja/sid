@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v24';
+const VERSION = 'sid-v25';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',

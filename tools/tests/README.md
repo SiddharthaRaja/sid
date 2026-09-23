@@ -21,6 +21,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/audit-account-switch.mjs
     node tools/tests/journal-and-file-backup.mjs
     node tools/tests/restructure.mjs
+    node tools/tests/ui-pass18.mjs
 
 ## What each one holds the line on
 
@@ -92,6 +93,15 @@ inside; the invented seeds are removed exactly once, after a snapshot,
 and never re-seeded; reference material that never claimed a date is
 left alone; the calendar holds only what the user added; its filter is
 four group chips with the per-platform switches folded away.
+
+**ui-pass18.mjs** — a platform page opens straight onto its tabs with
+no header block, and the handle/profile-URL fields live on Setup and
+still save; all eight platforms checked behave the same; a playbook is
+one continuous article with a jump list, no section tabs and no
+prev/next pagers; More can be starred, starring does not open the
+thing, the choice survives a reload and un-stars again; the capture
+button clears the bottom bar on every screen; the page is pure black
+with surfaces still distinguishable from it.
 
 ## The layers, in order of what they survive
 

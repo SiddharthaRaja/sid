@@ -30,12 +30,25 @@ function platformCount(key) {
   return { n, posted };
 }
 
-export function tile(label, hash, ico, { color, note, badge } = {}) {
-  return h('a', { class: 'tile', href: hash },
+export function tile(label, hash, ico, { color, note, badge, star } = {}) {
+  const el = h('a', { class: 'tile', href: hash },
     h('span', { class: 'tile-ico', html: icon(ico), style: color ? { color } : {} }),
     h('span', { class: 'tile-label', text: label }),
     note ? h('span', { class: 'tile-note', text: note }) : null,
     badge ? h('span', { class: 'tile-badge', text: badge }) : null);
+
+  /* The star sits on the tile rather than in a separate edit mode:
+     one tap, no ceremony, and it stops the tap from opening the
+     thing underneath it. */
+  if (star) {
+    el.append(h('button', {
+      class: `tile-star ${star.on ? 'on' : ''}`,
+      title: star.on ? 'Unpin from the top' : 'Pin to the top',
+      'aria-label': star.on ? 'Unpin' : 'Pin to the top',
+      onClick: (e) => { e.preventDefault(); e.stopPropagation(); star.toggle(); },
+    }, star.on ? '\u2605' : '\u2606'));
+  }
+  return el;
 }
 
 export function tileGrid(tiles) {
@@ -77,11 +90,38 @@ export function renderGroup(group) {
 /*  More — everything that is not a platform                   */
 /* ---------------------------------------------------------- */
 
-export function renderMoreGrid(items) {
+/* Twenty-six destinations in one flat grid means scrolling past
+   twenty-four of them to reach the two you actually use. Starred ones
+   come to the top, in their own section. */
+export function renderMoreGrid(items, rerender) {
   const root = h('div');
-  root.append(head('More', 'Everything else, one tap away.'));
-  root.append(tileGrid(items.map(([label, hash, ico, color]) =>
-    tile(label, hash, ico, { color }))));
+  const set = S.get('settings');
+  set.pinned = set.pinned || {};
+
+  const isOn = (hash) => !!set.pinned[hash];
+  const toggle = (hash) => {
+    if (set.pinned[hash]) delete set.pinned[hash];
+    else set.pinned[hash] = Date.now();
+    S.touch('settings');
+    rerender ? rerender() : null;
+  };
+
+  const make = ([label, hash, ico, color]) =>
+    tile(label, hash, ico, { color, star: { on: isOn(hash), toggle: () => toggle(hash) } });
+
+  const pinned = items.filter(([, hash]) => isOn(hash))
+    .sort((a, b) => set.pinned[a[1]] - set.pinned[b[1]]);
+  const rest = items.filter(([, hash]) => !isOn(hash));
+
+  root.append(head('More', pinned.length
+    ? 'Your starred ones first.'
+    : 'Everything else. Tap a star to keep something at the top.'));
+
+  if (pinned.length) {
+    root.append(tileGrid(pinned.map(make)));
+    root.append(h('div', { class: 'nav-sect', style: { paddingLeft: 0, marginTop: '22px' } }, 'Everything else'));
+  }
+  root.append(tileGrid(rest.map(make)));
   return root;
 }
 
