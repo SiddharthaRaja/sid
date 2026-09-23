@@ -9,7 +9,6 @@ import * as L from './local.js';
 import { icon, PCOLORS } from './icons.js';
 import { PLATFORMS, PLATFORM_GROUPS, platformsIn } from './data/platforms.js';
 
-import { renderDashboard } from './modules/dashboard.js';
 import { renderRelease }   from './modules/release.js';
 import { renderWrite }     from './modules/write.js';
 import { renderSeo }       from './modules/seo.js';
@@ -42,6 +41,7 @@ import { renderInbox, drainShares, inboxCount } from './modules/inbox.js';
 import { renderNotepad }  from './modules/notepad.js';
 import { renderSvara, leaveSvara } from './modules/svara.js';
 import { renderPlaybook } from './modules/playbook.js';
+import { renderGroup, renderMoreGrid, renderApps } from './modules/groups.js';
 import { calendarExportModal } from './modules/calexport.js';
 import * as R from './reader.js';
 import { applyTheme, cycleTheme, watchSystemTheme, themeMode } from './theme.js';
@@ -112,10 +112,57 @@ const ALL_SLICES = [
   ...PLATFORMS.map(p => `p_${p.key}`),
 ];
 
-/* Fill the reference-heavy modules on first run so the dashboard,
-   calendar and progress bars are right before you have visited them. */
+/* The four lists below used to be filled with dates this app invented
+   — a "master plan", tax-form deadlines, rights registrations, radio
+   stations — none of which anyone had chosen. They made the calendar
+   look full of overdue work that was not real work, which is worse
+   than an empty calendar.
+
+   removeInventedSeeds() clears them once, and `seedsRemoved` stops
+   them ever coming back. Everything the seeder still fills is
+   reference material that sits on its own tab and never claims a
+   date: ad accounts, the budget template, the asset checklist. */
+const INVENTED = [
+  ['plan', 'milestones', 'the master plan'],
+  ['finance', 'forms', 'tax and registration deadlines'],
+  ['rights', 'registrations', 'rights registrations'],
+  ['radio', 'stations', 'radio stations'],
+];
+
+async function removeInventedSeeds() {
+  const set = S.get('settings');
+  if (set.seedsRemoved) return 0;
+
+  /* Snapshot and journal first. This is the only destructive
+     migration in the app and it is not going to be the thing that
+     loses anything. */
+  const before = S.everything();
+  try { await L.writeSnapshot(before, 'pre-seed-removal'); }
+  catch (e) {
+    console.warn('seed removal deferred — could not take a snapshot first', e);
+    return 0;                       // try again next launch
+  }
+  try { const J = await import('./journal.js'); await J.recordAll(before, 'pre-seed-removal'); } catch {}
+
+  let n = 0;
+  for (const [slice, key] of INVENTED) {
+    const sl = S.get(slice);
+    const had = Array.isArray(sl[key]) ? sl[key].length : 0;
+    if (!had) continue;
+    sl[key] = [];
+    S.touch(slice);
+    n += had;
+  }
+  set.seedsRemoved = true;
+  S.touch('settings');
+  if (n) console.info(`removed ${n} invented seed items; a snapshot was taken first`);
+  return n;
+}
+
+/* Fill the reference-heavy modules on first run. */
 function seedDefaults() {
   const clone = (arr) => arr.map(x => ({ ...x }));
+  const gone = !!S.get('settings').seedsRemoved;
 
   /* First run: fill it. Later runs: add anything new the app has
      learned since, matched on `key`, without touching your edits. */
@@ -127,27 +174,29 @@ function seedDefaults() {
     return { list: [...existing, ...clone(added).map((x, i) => ({ ...x, ...extra, id: x.id || `n${Date.now()}${i}` }))], changed: true };
   };
 
-  const plan = S.get('plan');
-  const mPlan = merge(plan.milestones, SEED_MILESTONES, 'title');
-  if (mPlan.changed) { plan.milestones = mPlan.list; S.touch('plan'); }
-
-  const rights = S.get('rights');
-  const mReg = merge(rights.registrations, REGISTRATIONS_SEED, 'id');
-  if (mReg.changed) { rights.registrations = mReg.list; S.touch('rights'); }
-
   const fin = S.get('finance');
   let finDirty = false;
-  const mForms = merge(fin.forms, FORMS_SEED, 'id');
-  if (mForms.changed) { fin.forms = mForms.list; finDirty = true; }
+  if (!gone) {
+    const plan = S.get('plan');
+    const mPlan = merge(plan.milestones, SEED_MILESTONES, 'title');
+    if (mPlan.changed) { plan.milestones = mPlan.list; S.touch('plan'); }
+
+    const rights = S.get('rights');
+    const mReg = merge(rights.registrations, REGISTRATIONS_SEED, 'id');
+    if (mReg.changed) { rights.registrations = mReg.list; S.touch('rights'); }
+
+    const mForms = merge(fin.forms, FORMS_SEED, 'id');
+    if (mForms.changed) { fin.forms = mForms.list; finDirty = true; }
+
+    const radio = S.get('radio');
+    const mRadio = merge(radio.stations, RADIO_SEED, 'name', { status: 'not sent' });
+    if (mRadio.changed) { radio.stations = mRadio.list; S.touch('radio'); }
+  }
   const mAcc = merge(fin.accounts?.length ? fin.accounts : null, ACCOUNTS_SEED, 'id');
   if (mAcc.changed) { fin.accounts = mAcc.list; finDirty = true; }
   const mBud = merge(fin.budget, BUDGET_SEED, 'id');
   if (mBud.changed) { fin.budget = mBud.list; finDirty = true; }
   if (finDirty) S.touch('finance');
-
-  const radio = S.get('radio');
-  const mRadio = merge(radio.stations, RADIO_SEED, 'name', { status: 'not sent' });
-  if (mRadio.changed) { radio.stations = mRadio.list; S.touch('radio'); }
 
   const ads = S.get('ads');
   const mAds = merge(ads.campaigns, CAMPAIGNS_SEED, 'id');
@@ -175,7 +224,6 @@ function seedDefaults() {
 /* ---------------------------------------------------------- */
 
 const ROUTES = {
-  today:     { title: 'Today',              icon: 'dashboard',  render: (sub) => renderDashboard(sub, { merged: true }) },
   release:   { title: 'Release',            icon: 'settings',   render: renderRelease },
   write:     { title: 'Writing desk',        icon: 'copy',       render: renderWrite },
   seo:       { title: 'Discovery',           icon: 'stats',      render: renderSeo },
@@ -185,7 +233,6 @@ const ROUTES = {
   runsheet:  { title: 'Release day',         icon: 'calendar',   render: renderRunsheet },
   merch:     { title: 'Merch',               icon: 'finance',    render: renderMerch },
   site:      { title: 'Website',             icon: 'epk',        render: renderSite },
-  dashboard: { title: 'Dashboard',          icon: 'dashboard',  render: renderDashboard },
   queue:     { title: 'Queue',              icon: 'queue',      render: renderQueue },
   review:    { title: 'Weekly review',      icon: 'review',     render: renderReview },
   calendar:  { title: 'Calendar',           icon: 'calendar',   render: renderCalendar },
@@ -207,16 +254,29 @@ const ROUTES = {
   book:      { title: 'Playbooks',          icon: 'book',       render: renderPlaybook },
   settings:  { title: 'Settings',           icon: 'settings',   render: renderSettings },
 
+  /* The category screens. These are what the phone's bottom bar
+     points at: a grid of big buttons, nothing else. */
+  social:    { title: 'Social',             icon: 'instagram',  render: () => renderGroup('Social') },
+  text:      { title: 'Text',               icon: 'x',          render: () => renderGroup('Text') },
+  dsps:      { title: 'DSPs',               icon: 'spotify',    render: () => renderGroup('DSPs') },
+  more:      { title: 'More',               icon: 'more',       render: () => renderMoreGrid(MORE_GRID) },
+  apps:      { title: 'Apps',               icon: 'notepad',    render: renderApps },
+
   /* the two guest apps, deliberately last and deliberately separate */
   np:        { title: 'Notepad',            icon: 'notepad',    render: renderNotepad,  guest: true },
   sv:        { title: 'Svara',              icon: 'svara',      render: renderSvara,    guest: true },
 };
 
+/* The app opens on Social. It used to open on Today, a list of
+   deadlines this app had invented rather than dates anyone chose. */
+export const DEFAULT_HASH = '#/social';
+const DEFAULT_KEY = 'social';
+
 function parseHash() {
-  const raw = (location.hash || '#/today').replace(/^#\/?/, '');
+  const raw = (location.hash || DEFAULT_HASH).replace(/^#\/?/, '');
   const [seg, ...rest] = raw.split('/');
   if (seg === 'p') return { kind: 'platform', key: rest[0], sub: rest[1] };
-  return { kind: 'route', key: ROUTES[seg] ? seg : 'today', sub: rest[0] };
+  return { kind: 'route', key: ROUTES[seg] ? seg : DEFAULT_KEY, sub: rest[0] };
 }
 
 export function go(hash) { location.hash = hash; }
@@ -248,7 +308,7 @@ function navSection(label) {
       set.navCollapsed[label] = !set.navCollapsed[label];
       S.touch('settings');
       buildNav();
-      markActive(location.hash || '#/today');
+      markActive(location.hash || DEFAULT_HASH);
     },
   }, h('span', { text: label }), h('span', { class: 'caret', text: '\u25be' }));
 }
@@ -311,7 +371,6 @@ function buildNav() {
   /* Five that earn a permanent place. Everything else is one tap
      away under More, which stays collapsed until you open it. */
   box.append(
-    navItem('Today', '#/today', 'dashboard'),
     navItem('Calendar', '#/calendar', 'calendar'),
     navItem('Release', '#/release', 'settings'),
     navItem('Master plan', '#/plan', 'masterplan'),
@@ -342,46 +401,34 @@ function buildNav() {
     tb.append(h('button', { 'data-hash': hash, onClick: () => go(hash) },
       h('span', { html: icon(ico) }), h('span', { text: label })));
   });
-  tb.append(h('button', { 'data-hash': '#more', onClick: moreSheet },
-    h('span', { html: icon('more') }), h('span', { text: 'More' })));
+  /* No extra More button: More is one of the categories now, so
+     adding another produced two of them side by side. */
 }
 
 /* The phone's top-level sections: the bottom bar, and what a
    sideways flick moves between. Order is the swipe order. */
-export const BOTTOM = [
-  ['#/today', 'Today', 'dashboard'],
-  ['#/calendar', 'Calendar', 'calendar'],
-  ['#/release', 'Release', 'settings'],
-  ['#/p/instagram', 'Platforms', 'instagram'],
-  ['#/np', 'Notepad', 'notepad'],
-  ['#/sv', 'Svara', 'svara'],
+/* The More screen has to be complete — it is the only way to reach
+   anything that is not a platform now that Today is gone. */
+export const MORE_GRID = [
+  ['Release', '#/release', 'settings'],
+  ['Master plan', '#/plan', 'masterplan'],
+  ['Contacts', '#/contacts', 'contacts'],
+  ['Notes', '#/notes', 'notes'],
+  ...MORE,
+  ['Settings', '#/settings', 'settings'],
 ];
 
-/* Everything not on the bottom bar, one tap away. */
-function moreSheet() {
-  const link = (label, hash, ico, color) => h('a', {
-    class: 'stat', href: hash,
-    style: { textDecoration: 'none', color: 'inherit', display: 'block' },
-    onClick: () => setTimeout(close, 0),
-  }, h('div', { class: 'row', style: { gap: '9px' } },
-      h('span', { html: icon(ico), style: color ? { color } : { color: 'var(--fg-3)' } }),
-      h('span', { style: { fontWeight: 500 }, text: label })));
-
-  const body = h('div',
-    h('div', { class: 'grid g3' },
-      link('Master plan', '#/plan', 'masterplan'),
-      link('Contacts', '#/contacts', 'contacts'),
-      MORE.map(([label, hash, ico, color]) => link(label, hash, ico, color))),
-    h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Apps'),
-    h('div', { class: 'grid g3' },
-      link('Notepad', '#/np', 'notepad'),
-      link('Svara', '#/sv', 'svara')),
-    h('div', { class: 'nav-sect', style: { paddingLeft: 0 } }, 'Platforms'),
-    h('div', { class: 'grid g3' },
-      PLATFORMS.map(p => link(p.name, `#/p/${p.key}`, p.icon, PCOLORS[p.key]))));
-
-  const { close } = modal({ title: 'Everything else', body, wide: true });
-}
+/* The phone's bottom bar. Categories, not destinations: each one
+   opens a grid of big buttons rather than a page of its own, because
+   what you actually do on the phone is pick a platform and write. */
+export const BOTTOM = [
+  ['#/social',   'Social',   'instagram'],
+  ['#/text',     'Text',     'x'],
+  ['#/dsps',     'DSPs',     'spotify'],
+  ['#/more',     'More',     'more'],
+  ['#/apps',     'Apps',     'notepad'],
+  ['#/calendar', 'Calendar', 'calendar'],
+];
 
 function markActive(hash) {
   $$('#nav-scroll .nav-item').forEach(b => b.classList.toggle('on', b.dataset.hash === hash));
@@ -570,6 +617,7 @@ async function start() {
       started = false;
       return;
     }
+    await removeInventedSeeds();
     seedDefaults();
 
     /* anything shared into Sid from another app while it was closed */

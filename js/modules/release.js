@@ -183,7 +183,7 @@ export function renderRelease() {
       .filter(x => x.n);
     if (byPhase.length) {
       box.append(card(cardHead('By phase'),
-        h('div', { class: 'list' }, byPhase.map(x => h('a', { class: 'item', href: '#/today', style: { display: 'block', textDecoration: 'none', color: 'inherit' } },
+        h('div', { class: 'list' }, byPhase.map(x => h('a', { class: 'item', href: '#/plan', style: { display: 'block', textDecoration: 'none', color: 'inherit' } },
           h('div', { class: 'item-head' },
             h('span', { class: 'item-title', text: phaseTitle(x.p) }),
             h('span', { class: 'tag mono', text: String(x.n) })))))));

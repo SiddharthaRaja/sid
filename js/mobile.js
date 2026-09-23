@@ -153,7 +153,7 @@ export function setSwipeSections(list) { sections = list; }
 
 function sectionIndex() {
   if (!sections) return -1;
-  const hash = location.hash || '#/today';
+  const hash = location.hash || '#/social';
   const base = hash.startsWith('#/p/') ? '#/p/' : hash;
   return sections.findIndex(([h2]) =>
     h2 === hash || (base === '#/p/' && h2.startsWith('#/p/')) || hash.startsWith(h2 + '/'));

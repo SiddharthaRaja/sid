@@ -17,6 +17,21 @@ export const CALENDARS = () => ([
   ...PLATFORMS.map(p => ({ key: p.key, name: p.name, color: PCOLORS[p.key] || '#8d939c' })),
 ]);
 
+/* Which bucket a calendar belongs to, so the filter can be four
+   chips instead of twenty-three. */
+export const CAL_GROUPS = [
+  ['Social', 'Social'],
+  ['Text', 'Text'],
+  ['DSPs', 'DSPs'],
+  ['Other', 'Everything else'],
+];
+
+export function groupOf(key) {
+  const p = PLATFORMS.find(x => x.key === key);
+  return p ? p.group : 'Other';
+}
+export const calsInGroup = (g) => CALENDARS().filter(c => groupOf(c.key) === g);
+
 export const calColor = (key) => (CALENDARS().find(c => c.key === key) || {}).color || '#8d939c';
 export const calName  = (key) => (CALENDARS().find(c => c.key === key) || {}).name || key;
 

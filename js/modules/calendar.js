@@ -10,7 +10,7 @@ import {
   MONTHS, DOW, confirmDelete, relativeDay,
   removeFrom
 } from '../ui.js';
-import { CALENDARS, calColor, calName, collectEvents, eventsByDay } from '../agenda.js';
+import { CALENDARS, CAL_GROUPS, calsInGroup, groupOf, calColor, calName, collectEvents, eventsByDay } from '../agenda.js';
 import { scheduleRow } from './shared.js';
 import { calendarExportModal } from './calexport.js';
 import { icon } from '../icons.js';
@@ -93,31 +93,59 @@ export function renderCalendar() {
 
 let pickerOpen = false;
 
+/* Twenty-three individual on/off chips was unusable on a phone. The
+   filter is four groups — the same four the bottom bar uses — with
+   the per-platform switches folded away behind "Pick individually"
+   for the rare time you want exactly one. */
 function calendarPicker(cal, redraw) {
-  const cals = CALENDARS();
-  const on = cals.filter(c => cal.visible[c.key] !== false).length;
   const wrap = h('div', { style: { marginBottom: '14px' } });
+  const shown = (c) => cal.visible[c.key] !== false;
 
-  const toggle = h('button', { class: `chip ${pickerOpen ? 'on' : ''}`, onClick: () => { pickerOpen = !pickerOpen; redraw(); } },
-    `Calendars — ${on} of ${cals.length} showing ${pickerOpen ? '▴' : '▾'}`);
+  const setGroup = (g, on) => {
+    calsInGroup(g).forEach(c => { cal.visible[c.key] = on; });
+    S.touch('calendar');
+    redraw();
+  };
 
-  const summary = h('div', { class: 'row' }, toggle,
-    !pickerOpen ? cals.filter(c => cal.visible[c.key] !== false).slice(0, 8).map(c =>
-      h('span', { class: 'chip on', style: { pointerEvents: 'none' } },
-        h('span', { class: 'dot', style: { background: c.color } }), c.name)) : null,
-    !pickerOpen && on > 8 ? h('span', { class: 'small muted', text: `+${on - 8} more` }) : null);
-  wrap.append(summary);
+  const row = h('div', { class: 'row', style: { flexWrap: 'wrap' } });
+  const allCals = CALENDARS();
+  const allOn = allCals.every(shown);
+
+  row.append(h('button', {
+    class: `chip ${allOn ? 'on' : ''}`,
+    onClick: () => { allCals.forEach(c => cal.visible[c.key] = !allOn); S.touch('calendar'); redraw(); },
+  }, 'Everything'));
+
+  CAL_GROUPS.forEach(([g, label]) => {
+    const inG = calsInGroup(g);
+    if (!inG.length) return;
+    const onN = inG.filter(shown).length;
+    const state = onN === inG.length ? 'on' : onN ? 'part' : '';
+    row.append(h('button', {
+      class: `chip ${state}`,
+      title: `${onN} of ${inG.length} showing`,
+      onClick: () => setGroup(g, onN !== inG.length),
+    }, label, onN && onN < inG.length ? h('span', { class: 'small muted', text: ` ${onN}/${inG.length}` }) : null));
+  });
+
+  row.append(h('button', {
+    class: `chip ghost ${pickerOpen ? 'on' : ''}`,
+    onClick: () => { pickerOpen = !pickerOpen; redraw(); },
+  }, `Pick individually ${pickerOpen ? '\u25b4' : '\u25be'}`));
+
+  wrap.append(row);
 
   if (pickerOpen) {
-    const box = h('div', { class: 'row', style: { marginTop: '8px' } });
-    box.append(
-      h('button', { class: 'chip', onClick: () => { cals.forEach(c => cal.visible[c.key] = true); S.touch('calendar'); redraw(); } }, 'Show all'),
-      h('button', { class: 'chip', onClick: () => { cals.forEach(c => cal.visible[c.key] = false); S.touch('calendar'); redraw(); } }, 'Hide all'),
-    );
-    cals.forEach(c => box.append(h('button', {
-      class: `chip ${cal.visible[c.key] !== false ? 'on' : ''}`,
-      onClick: () => { cal.visible[c.key] = cal.visible[c.key] === false; S.touch('calendar'); redraw(); },
-    }, h('span', { class: 'dot', style: { background: c.color } }), c.name)));
+    const box = h('div', { style: { marginTop: '8px' } });
+    CAL_GROUPS.forEach(([g, label]) => {
+      const inG = calsInGroup(g);
+      if (!inG.length) return;
+      box.append(h('div', { class: 'small muted', style: { margin: '8px 0 4px' }, text: label }));
+      box.append(h('div', { class: 'row', style: { flexWrap: 'wrap' } }, inG.map(c => h('button', {
+        class: `chip ${shown(c) ? 'on' : ''}`,
+        onClick: () => { cal.visible[c.key] = cal.visible[c.key] === false; S.touch('calendar'); redraw(); },
+      }, h('span', { class: 'dot', style: { background: c.color } }), c.name))));
+    });
     wrap.append(box);
   }
   return wrap;

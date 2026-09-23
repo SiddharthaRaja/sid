@@ -6,7 +6,7 @@
    offline layer handles that.
    ============================================================ */
 
-const VERSION = 'sid-v22';
+const VERSION = 'sid-v23';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
@@ -16,7 +16,7 @@ const SHELL = [
   './js/data/platforms.js', './js/data/info.js', './js/data/masterplan.js',
   './js/data/radio.js', './js/data/rights.js', './js/data/finance.js', './js/data/video.js',
   './js/data/templates.js', './js/data/contacts.js', './js/data/ads.js', './js/data/assets.js',
-  './js/modules/dashboard.js', './js/modules/calendar.js', './js/modules/plan.js',
+  './js/modules/calendar.js', './js/modules/plan.js',
   './js/modules/release.js', './js/modules/timeline.js',
   './js/modules/compose.js', './js/modules/write.js', './js/modules/seo.js', './js/modules/health.js',
   './js/data/phrasebank.js', './js/data/hashtags.js', './js/data/seo.js',
@@ -41,7 +41,7 @@ const SHELL = [
   './js/modules/queue.js', './js/modules/ads.js', './js/modules/epk.js',
   './js/modules/assets.js', './js/modules/review.js',
   './js/reader.js', './js/modules/history.js', './js/ics.js',
-  './js/modules/calexport.js', './js/modules/meta.js', './js/modules/inbox.js',
+  './js/modules/groups.js', './js/modules/calexport.js', './js/modules/meta.js', './js/modules/inbox.js',
   './js/modules/links.js', './js/modules/pitch.js', './js/data/meta.js', './js/data/pitch.js',
   './js/data/history/a1.js', './js/data/history/a2.js', './js/data/history/a3.js', './js/data/history/a4.js', './js/data/history/a5.js', './js/data/history/a6.js', './js/data/history/g1.js', './js/data/history/g2.js', './js/data/history/g3.js', './js/data/history/g4.js', './js/data/history/g5.js', './js/data/history/g6.js', './js/data/history/g7.js', './js/data/history/index.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png', './icons/icon.svg',

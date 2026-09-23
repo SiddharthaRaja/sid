@@ -20,6 +20,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/audit-round3.mjs
     node tools/tests/audit-account-switch.mjs
     node tools/tests/journal-and-file-backup.mjs
+    node tools/tests/restructure.mjs
 
 ## What each one holds the line on
 
@@ -82,6 +83,15 @@ what it is about to replace; it is capped, and can be switched off. The
 live backup file writes the whole state then closes (never a truncated
 file over a good one), reports a failure instead of swallowing it, and
 degrades honestly on a browser that cannot do it.
+
+**restructure.mjs** — the navigation. The phone opens on Social, not
+on a list of invented deadlines; the bottom bar is the six categories;
+Today is gone and its old link falls back rather than erroring; each
+category is a grid of tiles that link to real pages and say what is
+inside; the invented seeds are removed exactly once, after a snapshot,
+and never re-seeded; reference material that never claimed a date is
+left alone; the calendar holds only what the user added; its filter is
+four group chips with the per-platform switches folded away.
 
 ## The layers, in order of what they survive
 
