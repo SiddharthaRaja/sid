@@ -24,6 +24,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/ui-pass18.mjs
     node tools/tests/diary-fill.mjs
     node tools/tests/text-size.mjs
+    node tools/tests/daily-use.mjs
 
 ## What each one holds the line on
 
@@ -142,3 +143,20 @@ mistake.
 
 Every test here exists because the behaviour it checks was once wrong.
 If one starts failing, do not adjust the test.
+
+**daily-use.mjs** — a day of actual use, end to end, rather than a unit.
+Open the app and be told which diary entry is due; find out per platform
+how many are owed, because X being current says nothing about Bluesky;
+tap through to that exact entry; write it and watch the count follow.
+While writing on one platform the other two versions of the same number
+are there to read, folded shut, with no way to paste them across —
+because the whole point is writing it three times in three voices.
+
+It also does the rude things. A hundred entries are searched rather than
+scrolled: typing `7` gives Diary 7 alone, not 7 and 17 and 70. Only
+thirty rows are drawn at a time. An editor left open does not follow you
+to the next page. A half-written entry survives the tab being killed
+outright — no unload, no goodbye — and everything is still there after a
+reload, which means something here only because the harness seeds once
+instead of on every navigation. A fresh install with no diary and no
+release date is told nothing is due, because nothing is.

@@ -17,6 +17,7 @@ import * as S from '../store.js';
 import { h, clear } from '../ui.js';
 import { icon, PCOLORS } from '../icons.js';
 import { PLATFORMS, platformsIn } from '../data/platforms.js';
+import { due as diaryDue, DIARY_TARGET } from '../diary.js';
 
 /* A tile counts what is in the thing it opens, because "Instagram"
    and "Instagram · 34 drafts" are different amounts of information
@@ -71,11 +72,69 @@ const GROUP_BLURB = {
   DSPs: 'Where the song sits once it is out.',
 };
 
+/* ---------------------------------------------------------- */
+/*  the one deadline this app is allowed to have an opinion on  */
+/* ---------------------------------------------------------- */
+
+/* Today was deleted because it invented deadlines. This is the
+   opposite case: the diary's cadence comes from the entries already
+   written, and the date comes from the release date that was chosen.
+   So one line, on a screen already being opened, saying which number
+   is due and which of the three are still blank. It disappears the
+   moment all three are written — nothing to dismiss, nothing to
+   ignore, and nothing to argue with. */
+export function diaryStrip() {
+  const d = diaryDue();
+  if (!d) return null;
+
+  if (d.n == null) {
+    if (d.startsIn > 14) return null;         // too far off to be news
+    return h('div', { class: 'card diary-strip' },
+      h('div', { class: 'ds-head' },
+        h('strong', { text: 'The diary starts ' + (d.startsIn === 1 ? 'tomorrow' : `in ${d.startsIn} days`) }),
+        h('span', { class: 'small muted', text: d.startsAt })));
+  }
+
+  if (d.allDone) {
+    const rest = d.tracks[0];
+    return h('div', { class: 'card diary-strip done' },
+      h('div', { class: 'ds-head' },
+        h('strong', { text: `Diary ${d.n} is written everywhere` }),
+        h('span', { class: 'small muted', text: `${rest.done} of ${DIARY_TARGET}` })));
+  }
+
+  /* How far behind you are is a per-platform fact — X can be current
+     while Bluesky has never been touched. So it is shown on each
+     track rather than collapsed into one number in the headline that
+     is true of none of them. */
+  const worst = Math.max(...d.tracks.map(t => t.behind));
+
+  return h('div', { class: `card diary-strip ${worst > 3 ? 'late' : ''}` },
+    h('div', { class: 'ds-head' },
+      h('strong', { text: `Diary ${d.n}` }),
+      h('span', { class: 'small muted', text: `${d.when} · ${d.last ? 'the last one' : 'due today'}` })),
+    h('div', { class: 'ds-tracks' }, d.tracks.map(t => {
+      const owed = t.behind > 1;
+      return h('a', {
+        class: `ds-track ${t.today ? 'on' : ''} ${owed ? 'owed' : ''}`,
+        href: t.id ? `#/p/${t.pKey}/${t.tKey}/${t.id}` : `#/p/${t.pKey}/${t.tKey}`,
+        title: t.today ? `Diary ${d.n} is written on ${t.label}`
+          : owed ? `${t.behind} unwritten on ${t.label}, up to and including today`
+            : `Write Diary ${d.n} on ${t.label}`,
+      },
+        h('span', { class: 'ds-mark', text: t.today ? '✓' : owed ? String(t.behind) : '·' }),
+        h('span', { class: 'ds-body' },
+          h('span', { class: 'ds-name', text: t.label }),
+          h('span', { class: 'ds-count', text: `${t.done} of ${DIARY_TARGET}` })));
+    })));
+}
+
 export function renderGroup(group) {
   const root = h('div');
   const list = platformsIn(group);
 
   root.append(head(group, GROUP_BLURB[group] || ''));
+  if (group === 'Text') { const s = diaryStrip(); if (s) root.append(s); }
   root.append(tileGrid(list.map(p => {
     const { n, posted } = platformCount(p.key);
     return tile(p.name, `#/p/${p.key}`, p.icon, {

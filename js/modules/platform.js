@@ -16,7 +16,7 @@ import { statsPanel } from './stats.js';
 import { pitchPanel } from './pitch.js';
 import { spotifyProfilePanel } from './sprofile.js';
 
-export function renderPlatform(p, sub) {
+export function renderPlatform(p, sub, openId) {
   const slice = `p_${p.key}`;
   const store = S.get(slice);
   const root = h('div');
@@ -50,13 +50,18 @@ export function renderPlatform(p, sub) {
        at the top instead, and the account fields moved into Setup. */
     root.append(subtabs(tabs, active, (k) => {
       active = k;
+      openId = null;                       // a tab change is not a deep link
       history.replaceState(null, '', `#/p/${p.key}/${k}`);
       draw();
     }));
 
     const type = p.types.find(t => t.key === active);
     if (type) {
-      root.append(contentList({ slice, store, type, pathHint: `${p.key}/${type.key}`, platformKey: p.key, onChanged: refreshHeader }));
+      /* Consumed once: opening the item rewrites the hash back to the
+         plain tab, so a reload or a back-tap does not reopen it. */
+      const want = openId; openId = null;
+      if (want) history.replaceState(null, '', `#/p/${p.key}/${active}`);
+      root.append(contentList({ slice, store, type, pathHint: `${p.key}/${type.key}`, platformKey: p.key, onChanged: refreshHeader, openId: want }));
     } else if (active === 'epitch') {
       root.append(pitchPanel());
     } else if (active === 'profile') {

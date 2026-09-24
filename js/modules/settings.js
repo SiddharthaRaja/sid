@@ -366,6 +366,7 @@ export function renderSettings(sub) {
         }, { cls: 'btn-sm btn-primary' }),
         btn('Import a backup', importBackup, { cls: 'btn-sm' }))));
 
+    box.append(installCard());
     box.append(diaryCard());
     box.append(fileBackupCard());
     box.append(journalCard());
@@ -479,6 +480,53 @@ export function renderSettings(sub) {
   }
 
   /* The hundred diary slots: what exists, and a way back out. */
+  /* Whether the browser has agreed to keep this site's data, and the
+     one lever that usually changes its mind.
+
+     A browser clears "best effort" storage when the device runs low
+     on space, without asking and without telling you. Installing the
+     app to the home screen is what moves it to "persistent" on
+     Android Chrome — so this card says which side of that line you
+     are on and, when it can, offers the one tap that crosses it. */
+  function installCard() {
+    const line = h('div', { class: 'small', style: { marginTop: '8px' } });
+    const actions = h('div', { class: 'row', style: { marginTop: '10px' } });
+
+    const paint = async () => {
+      clear(actions);
+      const persisted = await navigator.storage?.persisted?.().catch(() => false);
+      const installed = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+      const canInstall = !!window.Sid?.canInstall?.();
+
+      if (persisted) {
+        line.textContent = 'The browser has agreed to keep this app’s data. It will not be cleared to free up space.';
+        line.style.color = 'var(--ok)';
+        return;
+      }
+      line.style.color = 'var(--warn-fg)';
+      line.textContent = installed
+        ? 'Sid is installed, but the browser still has not marked its storage as persistent. Keep downloading backups — and connect the live backup file below.'
+        : 'The browser has not agreed to keep this app’s data, so it could be cleared if the phone runs low on space. Installing Sid to the home screen usually changes that.';
+
+      if (canInstall) {
+        actions.append(btn('Install Sid', async () => { await window.Sid.install(); paint(); },
+          { cls: 'btn-sm btn-primary' }));
+      } else if (!installed) {
+        actions.append(h('span', { class: 'small muted',
+          text: 'To install: your browser’s menu → "Add to home screen" (on iPhone, Share → "Add to Home Screen").' }));
+      }
+      actions.append(btn('Ask again', async () => {
+        const ok = await L.requestPersistence().catch(() => false);
+        toast(ok ? 'The browser agreed to keep your data' : 'The browser said no — install it and try again', 4000);
+        paint();
+      }, { cls: 'btn-sm btn-ghost' }));
+    };
+    paint();
+
+    return card(cardHead('Keeping this app’s data'), line, actions);
+  }
+
   function diaryCard() {
     const plan = DIARY.preview();
     const box = h('div');
@@ -491,10 +539,10 @@ export function renderSettings(sub) {
     box.append(h('div', { class: 'list' }, plan.rows.map(r => h('div', { class: 'item' },
       h('div', { class: 'item-head' },
         h('span', { class: 'item-title', text: r.label }),
-        h('span', { class: 'tag', text: `${r.has} of ${DIARY.DIARY_TARGET}` }),
+        h('span', { class: `tag ${r.wrote ? 'ok' : ''}`, text: `${r.wrote} written` }),
         r.missing
           ? h('span', { class: 'small muted', text: `${r.missing} slots missing (${r.from}–${r.to})` })
-          : h('span', { class: 'tag ok', text: 'complete' }))))));
+          : h('span', { class: 'small muted', text: `${r.has} slots ready` }))))));
 
     return card(
       cardHead('The diary',
@@ -524,9 +572,16 @@ export function renderSettings(sub) {
     const st = F.status();
     const line = h('div', { class: 'small', style: { marginTop: '8px' } });
 
+    /* Whatever went wrong, a JavaScript error message is not an
+       instruction. If it does not read like a sentence, say the
+       useful thing instead. */
+    const human = (msg) => (/is not a function|undefined|null|\[object/i.test(String(msg))
+      ? 'Lost the link to that file — choose it again.'
+      : String(msg));
+
     const paint = () => {
       const now = F.status();
-      line.textContent = now.error ? now.error
+      line.textContent = now.error ? human(now.error)
         : now.connected ? `Connected — writing to "${now.name}"${now.lastWrite ? `, last at ${new Date(now.lastWrite).toLocaleTimeString()}` : ' (first write on the next snapshot)'}.`
         : 'Not connected.';
       line.style.color = now.error ? 'var(--danger)' : now.connected ? 'var(--ok)' : 'var(--fg-3)';

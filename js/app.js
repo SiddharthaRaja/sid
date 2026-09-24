@@ -4,7 +4,7 @@
 
 import * as B from './backend.js';
 import * as S from './store.js';
-import { $, $$, h, clear, toast, modal, download } from './ui.js';
+import { $, $$, h, clear, toast, modal, download, closeAllModals } from './ui.js';
 import * as L from './local.js';
 import * as DIARY from './diary.js';
 import { icon, PCOLORS } from './icons.js';
@@ -301,7 +301,10 @@ const DEFAULT_KEY = 'social';
 function parseHash() {
   const raw = (location.hash || DEFAULT_HASH).replace(/^#\/?/, '');
   const [seg, ...rest] = raw.split('/');
-  if (seg === 'p') return { kind: 'platform', key: rest[0], sub: rest[1] };
+  /* #/p/x/thread/<id> opens that one item straight into its editor,
+     so "Diary 44 on Threads" is one tap from anywhere rather than a
+     scroll through a hundred of them. */
+  if (seg === 'p') return { kind: 'platform', key: rest[0], sub: rest[1], open: rest[2] };
   return { kind: 'route', key: ROUTES[seg] ? seg : DEFAULT_KEY, sub: rest[0] };
 }
 
@@ -480,6 +483,9 @@ let lastKey = null;
 
 function route() {
   const r = parseHash();
+  /* Following a link out of an open editor has to close it, or the
+     sheet stays on top of whatever you just navigated to. */
+  closeAllModals();
   const view = clear($('#view'));
   window.scrollTo(0, 0);
 
@@ -494,7 +500,7 @@ function route() {
       const p = PLATFORMS.find(x => x.key === r.key) || PLATFORMS[0];
       $('#top-title').textContent = p.name;
       markActive(`#/p/${p.key}`);
-      view.append(renderPlatform(p, r.sub));
+      view.append(renderPlatform(p, r.sub, r.open));
     } else {
       const def = ROUTES[r.key];
       $('#top-title').textContent = def.title;
@@ -775,6 +781,38 @@ async function checkForUpdate() {
 }
 let updateWaiting = null;
 
+/* ---- installing the app ----------------------------------------
+   The banner has been saying "the browser would not mark this site's
+   storage as persistent" for weeks, and the honest fix is not another
+   backup: on Android Chrome, an installed PWA is what makes
+   navigator.storage.persist() succeed. The browser hands us the
+   prompt; the banner just needs somewhere to put it. */
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  paintHealth();
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  /* Ask again now that it can actually be granted. */
+  L.requestPersistence().then(() => paintHealth()).catch(() => {});
+});
+
+async function runInstall() {
+  if (!installPrompt) return;
+  const p = installPrompt;
+  installPrompt = null;
+  try {
+    p.prompt();
+    const { outcome } = await p.userChoice;
+    if (outcome !== 'accepted') { installPrompt = p; paintHealth(); return; }
+    toast('Installed. Asking the browser to keep your data…', 4000);
+    await L.requestPersistence().catch(() => {});
+  } catch { installPrompt = p; }
+  paintHealth();
+}
+
 function paintHealth() {
   const bar = $('#health');
   if (!bar) return;
@@ -820,7 +858,16 @@ function paintHealth() {
   else if (hh.cloud === 'blocked') { level = 'bad'; text = hh.detail; }
   else if (hh.cloud === 'failing') { level = 'bad'; text = hh.detail; }
   else if (hh.cloud === 'stalled') { level = 'warn'; text = hh.detail; }
-  else if (probs.length) { level = 'warn'; text = probs[0]; }
+  else if (probs.length) {
+    level = 'warn'; text = probs[0];
+    /* If the complaint is about persistence and the browser is willing
+       to install, offer that instead of another backup — it is the
+       thing that actually fixes it. */
+    if (installPrompt && /persistent/i.test(text)) {
+      text += ' Installing Sid to your home screen usually lets it.';
+      healthAction = { label: 'Install Sid', run: runInstall };
+    }
+  }
   else if (L.daysSinceExport() > 7) {
     level = 'warn';
     text = L.lastExport()
@@ -838,7 +885,15 @@ function paintHealth() {
 /* Exposed on purpose. When something goes wrong with your data I need
    to be able to ask you to run one line in the console rather than
    guess — and the Diagnostics card reads the same objects. */
-window.Sid = { S, B, L, exportBackup, diagnose: () => S.diagnose(), __putSnap: (r) => L.putSnapshotRaw(r) };
+window.Sid = {
+  S, B, L, exportBackup,
+  diagnose: () => S.diagnose(),
+  __putSnap: (r) => L.putSnapshotRaw(r),
+  /* Settings asks these two: only the page that caught the browser's
+     install event can fire it, and the event can arrive at any time. */
+  canInstall: () => !!installPrompt,
+  install: runInstall,
+};
 
 window.addEventListener('sid-health', paintHealth);
 window.addEventListener('sid-storage-problem', paintHealth);

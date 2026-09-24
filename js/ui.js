@@ -53,12 +53,25 @@ export function toast(msg, ms = 2200) {
 
 /* ---------- modal ---------- */
 
+/* The open sheet, if there is one. Navigating away has to shut it —
+   otherwise following a link from inside an editor leaves the old
+   editor sitting on top of the page you just opened. */
+let openModal = null;
+export function closeAllModals() { openModal?.(); }
+
 export function modal({ title, body, actions = [], wide = false, onClose }) {
   const root = $('#modal-root');
+  openModal?.();                     // only ever one at a time
   root.hidden = false;
   clear(root);
 
-  const close = () => { root.hidden = true; clear(root); document.removeEventListener('keydown', onKey); onClose?.(); };
+  const close = () => {
+    if (openModal === close) openModal = null;
+    root.hidden = true; clear(root);
+    document.removeEventListener('keydown', onKey);
+    onClose?.();
+  };
+  openModal = close;
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
 

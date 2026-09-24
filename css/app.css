@@ -1039,3 +1039,56 @@ pre.pb-code{
 .tile-star.on{ color:var(--accent); opacity:1; }
 /* leave room so a long label never runs under the star */
 .tile:has(.tile-star) .tile-label{ padding-right:24px; }
+
+/* ---------- the diary strip ----------
+   One line on the Text screen: which entry is due, and which of the
+   three places it has been written. It removes itself once all three
+   are done, so there is never anything to dismiss. */
+.diary-strip{ margin-bottom:16px; padding:12px 14px; }
+.diary-strip.late{ border-color:var(--warn-fg); }
+.diary-strip.done{ opacity:.75; }
+.ds-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.ds-head strong{ font-size:var(--fs-head); }
+.ds-tracks{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.ds-track{
+  flex:1 1 0; min-width:0;
+  display:flex; align-items:center; gap:7px;
+  padding:9px 11px; border-radius:10px; text-decoration:none;
+  background:var(--bg-2); border:1px solid var(--line); color:var(--fg);
+}
+.ds-track:hover{ border-color:var(--fg-3); }
+.ds-track.on{ background:var(--accent-soft); border-color:var(--accent-line); }
+.ds-mark{ width:14px; text-align:center; color:var(--fg-3); font-weight:600; font-size:var(--fs-sm); }
+.ds-track.on .ds-mark{ color:var(--accent); }
+/* how many are owed on this one platform, not across all three */
+.ds-track.owed{ border-color:var(--warn-fg); }
+.ds-track.owed .ds-mark{ color:var(--warn-fg); }
+.ds-body{ display:flex; flex-direction:column; min-width:0; line-height:1.25; }
+.ds-name{ font-size:var(--fs-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ds-count{ font-size:var(--fs-lab); color:var(--fg-3); white-space:nowrap; }
+
+/* ---------- search + jump above a long list ---------- */
+.list-tools{ gap:8px; align-items:center; }
+.list-tools .inp{ width:100%; }
+.chip.due{ background:var(--accent-soft); border-color:var(--accent-line); color:var(--fg); font-weight:500; }
+
+/* ---------- the other two versions of a diary entry ----------
+   Folded shut by default. Reference, not a clipboard. */
+.sib{ margin-bottom:14px; }
+.sib-toggle{
+  display:flex; align-items:center; gap:7px; width:100%;
+  padding:7px 10px; border-radius:9px; cursor:pointer;
+  background:var(--bg-2); border:1px solid var(--line);
+  color:var(--fg-2); font-size:var(--fs-sm); text-align:left;
+}
+.sib-toggle:hover{ color:var(--fg); border-color:var(--fg-3); }
+.sib-caret{ color:var(--fg-3); }
+.sib-panes{ display:grid; gap:10px; margin-top:9px; }
+.sib-pane{
+  padding:10px 12px; border-radius:9px;
+  background:var(--bg-inset); border:1px solid var(--line);
+}
+.sib-text{
+  white-space:pre-wrap; color:var(--fg-2); font-size:var(--fs-sm);
+  margin-top:4px; max-height:220px; overflow:auto;
+}

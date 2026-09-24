@@ -14,6 +14,7 @@ import { icon } from '../icons.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
 import { writingAids } from './compose.js';
 import { mediaFromUrl } from '../drive.js';
+import { due as diaryDue, diaryNo, DIARY_TRACKS, written as diaryWritten } from '../diary.js';
 
 export const STATUSES = [
   ['idea', 'Idea'], ['draft', 'Draft'], ['ready', 'Ready'],
@@ -309,6 +310,48 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
 /*  generic content item editor                                */
 /* ---------------------------------------------------------- */
 
+/* The same diary entry gets written three times, once in each
+   platform's voice — never pasted across, which is the whole point.
+   What helps is seeing the other two while you write this one, so
+   you are rewriting a thought rather than trying to recall it. Read
+   only, folded shut, and no copy button anywhere near it. */
+function siblingDiary(item, pkey, tkey) {
+  const n = diaryNo(item.title);
+  if (n == null) return null;
+  if (!DIARY_TRACKS.some(([p, t]) => p === pkey && t === tkey)) return null;
+
+  const others = DIARY_TRACKS
+    .filter(([p]) => p !== pkey)
+    .map(([p, t, label]) => {
+      const arr = (S.get(`p_${p}`).content || {})[t] || [];
+      const sib = arr.find(x => diaryNo(x.title) === n);
+      return { label, text: diaryWritten(sib) ? preview(sib).trim() : '' };
+    })
+    .filter(o => o.text);
+
+  if (!others.length) return null;
+
+  const box = h('div', { class: 'sib' });
+  const panes = h('div', { class: 'sib-panes', hidden: true },
+    others.map(o => h('div', { class: 'sib-pane' },
+      h('div', { class: 'lab', text: o.label }),
+      h('div', { class: 'sib-text', text: o.text }))));
+
+  box.append(
+    h('button', {
+      class: 'sib-toggle',
+      type: 'button',
+      onClick: () => {
+        panes.hidden = !panes.hidden;
+        box.querySelector('.sib-caret').textContent = panes.hidden ? '▸' : '▾';
+      },
+    },
+      h('span', { class: 'sib-caret', text: '▸' }),
+      h('span', { text: `Diary ${n} on ${others.map(o => o.label).join(' and ')}` })),
+    panes);
+  return box;
+}
+
 export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, onDelete, onDuplicate }) {
   const body = h('div');
   const pkey = platformKey || String(pathHint || '').split('/')[0] || '';
@@ -373,6 +416,10 @@ export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, o
     h('label', { class: 'field' },
       h('span', { class: 'lab', text: type.limit ? `Text (limit ${type.limit})` : 'Text' }),
       bodyInput, counter, gaps),
+    /* The other two versions sit directly under the box you are
+       typing in, not above the title — you glance down at them
+       while writing rather than scrolling back up. */
+    siblingDiary(item, pkey, type.key),
     aids.el,
     variantBox,
     type.hint ? h('p', { class: 'small muted', text: type.hint }) : null,
@@ -480,16 +527,56 @@ export function templatePicker({ platformKey, typeKey, onInsert }) {
   }, { cls: 'btn-sm', icon: 'copy' });
 }
 
-export function contentList({ slice, store, type, pathHint, platformKey, onChanged }) {
+/* A list stops being a list somewhere around thirty rows and becomes
+   a scroll. Past that, finding one thing needs a search box, and
+   drawing all of them needs a reason. Both kick in on their own. */
+const SEARCH_FROM = 8;
+const PAGE = 30;
+
+/**
+ * Does this item match what was typed?
+ *
+ * A bare number means the numbered entry, and only that one — typing
+ * 7 in a hundred-entry diary has to give you Diary 7, not Diary 7 and
+ * 17 and 70 and every body that happens to contain a seven. Anything
+ * else is an ordinary substring search across the whole item.
+ */
+function matches(item, q) {
+  if (!q) return true;
+  if (/^\d{1,3}$/.test(q)) {
+    const m = String(item.title || '').match(/\b(\d{1,3})\b/);
+    return !!m && m[1] === q;
+  }
+  const needle = q.toLowerCase();
+  return [item.title, item.body, item.tags, item.notes, item.when]
+    .some(v => String(v || '').toLowerCase().includes(needle));
+}
+
+/* The diary convention is that the first line of the body is the
+   entry's number — which the title already says. Repeating it in the
+   preview costs a line per row and tells you nothing, so the row
+   shows the writing instead. The body itself is never touched. */
+function preview(item) {
+  const body = String(item.body || '');
+  const n = diaryNo(item.title);
+  if (n == null) return body;
+  const nl = body.indexOf('\n');
+  if (nl === -1) return body.trim() === String(n) ? '' : body;
+  return body.slice(0, nl).trim() === String(n) ? body.slice(nl + 1) : body;
+}
+
+export function contentList({ slice, store, type, pathHint, platformKey, onChanged, openId }) {
   const wrap = h('div');
   store.content = store.content || {};
   store.content[type.key] = store.content[type.key] || [];
   const items = store.content[type.key];
 
   let filter = 'all';
+  let query = '';
+  let limit = PAGE;
 
   const open = (item) => itemEditor({
-    item, slice, type, pathHint,
+    item, slice, type, pathHint, platformKey,
     onSave: draw,
     onDelete: () => { removeFrom(items, item); S.touch(slice); draw(); },
   });
@@ -497,6 +584,16 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
   const add = () => {
     const item = { id: uid(), title: '', body: '', status: 'draft', when: '', tags: '', notes: '', media: [] };
     items.unshift(item); S.touch(slice); open(item);
+  };
+
+  /* The diary run, if this tab holds one: which number is due today
+     and where it sits in this list. */
+  const dueHere = () => {
+    const d = diaryDue();
+    if (!d || d.n == null) return null;
+    const t = d.tracks.find(x => x.pKey === platformKey && x.tKey === type.key);
+    if (!t || !t.id) return null;
+    return { n: d.n, id: t.id, written: t.today };
   };
 
   const draw = () => {
@@ -517,35 +614,90 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
         },
       }),
       h('div', { style: { flex: 1 } }),
-      [['all', 'All'], ...STATUSES].map(([k, l]) =>
-        h('button', { class: `chip ${filter === k ? 'on' : ''}`, onClick: () => { filter = k; draw(); } },
-          `${l}${k === 'all' ? '' : ' ' + items.filter(i => i.status === k).length}`))));
+      /* On a long list, a row of statuses that all read zero is two
+         lines of screen spent saying nothing. Only the ones you have
+         something in are offered — plus whichever is selected, so the
+         filter never vanishes from under you. */
+      [['all', 'All'], ...STATUSES]
+        .map(([k, l]) => [k, l, k === 'all' ? items.length : items.filter(i => i.status === k).length])
+        .filter(([k, , n]) => items.length < SEARCH_FROM || n > 0 || filter === k)
+        .map(([k, l, n]) =>
+          h('button', { class: `chip ${filter === k ? 'on' : ''}`, onClick: () => { filter = k; draw(); } },
+            `${l}${k === 'all' ? '' : ' ' + n}`))));
 
-    const shown = items.filter(i => filter === 'all' || i.status === filter);
-    if (!shown.length) {
-      wrap.append(empty(items.length ? 'Nothing with that status' : `No ${type.label.toLowerCase()} yet`,
-        items.length ? '' : type.hint || 'Start banking them now so posting later takes no thought.'));
-      return;
+    /* Search, and a one-tap jump to today's diary entry. Neither is
+       shown on a short list, where they would just be clutter. */
+    if (items.length >= SEARCH_FROM) {
+      const box = h('input', {
+        class: 'inp', type: 'search', value: query, placeholder: `Search ${items.length} ${type.label.toLowerCase()}…`,
+        onInput: (e) => {
+          query = e.target.value;
+          limit = PAGE;
+          paintList();
+          /* keep the caret where it was — only the list below redraws */
+        },
+      });
+      const d = dueHere();
+      wrap.append(h('div', { class: 'row list-tools', style: { marginBottom: '10px' } },
+        h('div', { style: { flex: 1 } }, box),
+        d ? h('button', {
+          class: `chip ${d.written ? 'on' : 'due'}`,
+          title: d.written ? `Diary ${d.n} — written` : `Diary ${d.n} is due today`,
+          onClick: () => { const it = items.find(x => x.id === d.id); if (it) open(it); },
+        }, d.written ? `✓ ${d.n}` : `Today · ${d.n}`) : null));
     }
 
-    const list = h('div', { class: 'list' });
-    shown.forEach(item => {
-      const iso = resolveDate(item.when, set.releaseDate);
-      list.append(h('div', { class: 'item', onClick: () => open(item) },
-        h('div', { class: 'item-head' },
-          h('span', { class: 'item-title', text: item.title || (item.body || '').slice(0, 60) || 'Untitled' }),
-          h('span', { class: `tag ${STATUS_TAG[item.status] || ''}`, text: (STATUSES.find(s => s[0] === item.status) || ['', 'Draft'])[1] })),
-        item.body ? h('div', { class: 'item-body', text: item.body }) : null,
-        h('div', { class: 'item-meta' },
-          item.when ? h('span', { text: iso ? `${fmtDate(iso)} · ${tLabel(iso, set.releaseDate) || relativeDay(iso)}` : item.when }) : null,
-          item.media?.length ? h('span', { text: `${item.media.length} attachment${item.media.length > 1 ? 's' : ''}` }) : null,
-          item.tags ? h('span', { text: item.tags }) : null,
-          type.limit ? h('span', { text: `${(item.body || '').length}/${type.limit}` }) : null)));
-    });
-    wrap.append(list);
+    const listBox = h('div');
+    wrap.append(listBox);
+
+    function paintList() {
+      clear(listBox);
+      const shown = items.filter(i =>
+        (filter === 'all' || i.status === filter) && matches(i, query.trim()));
+
+      if (!shown.length) {
+        listBox.append(empty(
+          query.trim() ? 'Nothing matches that'
+            : items.length ? 'Nothing with that status' : `No ${type.label.toLowerCase()} yet`,
+          items.length ? '' : type.hint || 'Start banking them now so posting later takes no thought.'));
+        return;
+      }
+
+      const page = shown.slice(0, limit);
+      const list = h('div', { class: 'list' });
+      page.forEach(item => {
+        const iso = resolveDate(item.when, set.releaseDate);
+        list.append(h('div', { class: 'item', onClick: () => open(item) },
+          h('div', { class: 'item-head' },
+            h('span', { class: 'item-title', text: item.title || (item.body || '').slice(0, 60) || 'Untitled' }),
+            h('span', { class: `tag ${STATUS_TAG[item.status] || ''}`, text: (STATUSES.find(s => s[0] === item.status) || ['', 'Draft'])[1] })),
+          preview(item) ? h('div', { class: 'item-body', text: preview(item) }) : null,
+          h('div', { class: 'item-meta' },
+            item.when ? h('span', { text: iso ? `${fmtDate(iso)} · ${tLabel(iso, set.releaseDate) || relativeDay(iso)}` : item.when }) : null,
+            item.media?.length ? h('span', { text: `${item.media.length} attachment${item.media.length > 1 ? 's' : ''}` }) : null,
+            item.tags ? h('span', { text: item.tags }) : null,
+            type.limit ? h('span', { text: `${(item.body || '').length}/${type.limit}` }) : null)));
+      });
+      listBox.append(list);
+
+      if (shown.length > page.length) {
+        listBox.append(h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '12px' } },
+          btn(`Show ${Math.min(PAGE, shown.length - page.length)} more of ${shown.length - page.length}`,
+            () => { limit += PAGE; paintList(); }, { cls: 'btn-sm btn-ghost' })));
+      }
+    }
+
+    paintList();
   };
 
   draw();
+
+  /* A deep link — #/p/x/thread/<id> — lands here. Open it once the
+     list exists, so closing the editor leaves the list behind it. */
+  if (openId) {
+    const it = items.find(x => x.id === openId);
+    if (it) setTimeout(() => open(it), 0);
+  }
   return wrap;
 }
 

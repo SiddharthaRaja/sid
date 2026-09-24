@@ -20,7 +20,7 @@
    ============================================================ */
 
 import * as S from './store.js';
-import { uid } from './ui.js';
+import { uid, todayISO, daysBetween } from './ui.js';
 import { offsetOf, asT, isISO } from './phases.js';
 
 export const DIARY_TARGET = 100;
@@ -116,8 +116,16 @@ export function preview() {
   const rows = DIARY_TRACKS.map(([pKey, tKey, label]) => {
     const have = existing(pKey, tKey);
     const missing = [];
-    for (let n = 1; n <= DIARY_TARGET; n++) if (!have.has(n)) missing.push(n);
-    return { pKey, tKey, label, has: have.size, missing: missing.length, from: missing[0], to: missing[missing.length - 1] };
+    let wrote = 0;
+    for (let n = 1; n <= DIARY_TARGET; n++) {
+      if (!have.has(n)) missing.push(n);
+      else if (written(have.get(n))) wrote++;
+    }
+    /* "100 of 100" counted slots, which is a number about this app
+       rather than about the diary. How many are actually written is
+       the one worth showing. */
+    return { pKey, tKey, label, has: have.size, wrote,
+             missing: missing.length, from: missing[0], to: missing[missing.length - 1] };
   });
 
   return {
@@ -180,6 +188,76 @@ export function fill() {
   });
 
   return { ok: true, added: done.reduce((a, d) => a + d.added, 0), done };
+}
+
+/* ============================================================
+   Which one is due, and how far along each track is.
+
+   The diary is the one thing in the release with a real, chosen
+   cadence behind it — one a day, and the dates come from the run
+   already written rather than from anything this app decided. That
+   makes it the only thing the app has any business telling you is
+   due today.
+   ============================================================ */
+
+/** Has this slot actually been written in, or is it still the bare number? */
+export function written(it) {
+  if (!it) return false;
+  const n = diaryNo(it.title);
+  const body = String(it.body || '').trim();
+  /* A blank slot's body is just its own number. Anything more — even
+     one word — counts as started. */
+  return body !== '' && body !== String(n);
+}
+
+/**
+ * The entry that should be written by now.
+ *
+ * Today's T-offset is however many days today is from release. The
+ * due entry is the last one scheduled on or before that. Before the
+ * run starts there is nothing due; after entry 100 the run is over.
+ */
+export function due(todayIso) {
+  const set = S.get('settings');
+  const rel = set.releaseDate;
+  const sch = schedule();
+  if (!rel || !isISO(rel) || !sch) return null;
+
+  const todayOff = daysBetween(rel, todayIso || todayISO());
+
+  let n = null;
+  for (let i = 1; i <= DIARY_TARGET; i++) {
+    if (sch.map.get(i) <= todayOff) n = i; else break;
+  }
+  if (n == null) {
+    /* the run has not started yet — say when it does */
+    return { n: null, startsIn: sch.map.get(1) - todayOff, startsAt: asT(sch.map.get(1)) };
+  }
+
+  const tracks = DIARY_TRACKS.map(([pKey, tKey, label]) => {
+    const have = existing(pKey, tKey);
+    const it = have.get(n) || null;
+    let behind = 0;
+    for (let i = 1; i <= n; i++) if (!written(have.get(i))) behind++;
+    let done = 0;
+    for (let i = 1; i <= DIARY_TARGET; i++) if (written(have.get(i))) done++;
+    return {
+      pKey, tKey, label,
+      id: it ? it.id : null,
+      done,                                  // written, out of 100
+      today: written(it),                    // today's one is written
+      behind,                                // unwritten at or before today
+    };
+  });
+
+  return {
+    n,
+    when: asT(sch.map.get(n)),
+    offset: sch.map.get(n),
+    last: n >= DIARY_TARGET,
+    tracks,
+    allDone: tracks.every(t => t.today),
+  };
 }
 
 /**

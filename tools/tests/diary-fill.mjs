@@ -192,9 +192,32 @@ const read = (page) => page.evaluate(() => {
   const shown = await page.evaluate(async () => {
     location.hash = '#/p/bluesky/diary';
     await new Promise(r => setTimeout(r, 800));
-    return document.querySelector('#view').textContent.includes('Diary 100');
+    const v = document.querySelector('#view');
+    return {
+      first: [...v.querySelectorAll('.item-title')].map(t => t.textContent)[0],
+      rows: v.querySelectorAll('.item').length,
+      /* a hundred rows is a scroll, not a list — only a page is drawn */
+      more: /Show \d+ more/.test(v.textContent),
+    };
   });
-  ok('8b and the entries show up in it', shown, String(shown));
+  ok('8b and the entries show up in it', shown.first === 'Diary 1' && shown.rows > 0, JSON.stringify(shown));
+  ok('8c a hundred of them are not all drawn at once',
+    shown.rows <= 30 && shown.more, JSON.stringify(shown));
+
+  /* the whole point of the search box: reach number 100 without
+     scrolling past ninety-nine others */
+  const found = await page.evaluate(async () => {
+    const box = document.querySelector('#view .list-tools input');
+    if (!box) return { box: false };
+    box.value = '100';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 400));
+    const titles = [...document.querySelectorAll('#view .item-title')].map(t => t.textContent);
+    return { box: true, titles };
+  });
+  ok('8d searching "100" finds Diary 100 and nothing else',
+    found.box && found.titles.length === 1 && found.titles[0] === 'Diary 100',
+    JSON.stringify(found));
   await ctx.close();
 }
 
