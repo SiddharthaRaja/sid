@@ -9,9 +9,10 @@ import * as L from '../local.js';
 import * as J from '../journal.js';
 import * as F from '../filebackup.js';
 import * as DIARY from '../diary.js';
+import * as AC from '../autocorrect.js';
 import { calendarExportModal } from './calexport.js';
 import {
-  h, clear, btn, card, cardHead, empty, field, modal, subtabs, selectField, toast,
+  h, clear, btn, card, cardHead, empty, field, modal, subtabs, selectField, checkbox, toast,
   download, fmtDate, todayISO, confirmDelete, copy,
 } from '../ui.js';
 import { THEME_MODES, ACCENTS, TEXT_SIZES, themeMode, accent, textSize, setThemeMode, setAccent, setTextSize } from '../theme.js';
@@ -75,6 +76,26 @@ export function renderSettings(sub) {
         h('div', { class: 'field', style: { marginTop: '14px' } },
           h('span', { class: 'lab', text: 'This is what a field label looks like' }),
           h('input', { class: 'inp', placeholder: 'and this is a box you type into', readOnly: true }))),
+
+      /* Autocorrect. Two halves, because people who want curly
+         quotes and people who want their typos caught are not
+         always the same person. */
+      card(
+        cardHead('Autocorrect'),
+        h('p', { class: 'small muted' },
+          'Fixes the word you just finished, as you finish it \u2014 never anything else you have written, and never a #hashtag, an @handle or a link. One undo puts back exactly what you typed.'),
+        h('div', { style: { marginTop: '10px' } },
+          checkbox('Typography \u2014 curly quotes, \u2014 for --, \u2026 for ...',
+            { on: AC.typographyOn() }, 'on',
+            { slice: 'settings', plain: true, onChange: (v) => { AC.setPart('typography', v); draw(); } }),
+          checkbox('Spelling and capitals \u2014 common typos, a lone \u201ci\u201d, the start of a sentence',
+            { on: AC.spellingOn() }, 'on',
+            { slice: 'settings', plain: true, onChange: (v) => { AC.setPart('spelling', v); draw(); } })),
+        h('div', { class: 'field', style: { marginTop: '12px' } },
+          h('span', { class: 'lab', text: 'Try it here \u2014 type: teh mix is done...' }),
+          AC.attach(h('textarea', { class: 'inp', rows: 2, placeholder: 'Nothing typed here is saved.' }))),
+        h('p', { class: 'small muted', style: { marginTop: '8px' } },
+          'Song lyrics in Notepad are left alone on purpose \u2014 a forced capital at the start of every line is not what a lyric wants.')),
 
       card(
         cardHead('Accent'),

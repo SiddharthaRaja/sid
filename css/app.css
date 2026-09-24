@@ -261,6 +261,8 @@ select.inp{cursor:pointer}
 .check{display:flex;align-items:flex-start;gap:9px;cursor:pointer;padding:5px 0;line-height:1.5}
 .check input{margin:3px 0 0;accent-color:var(--accent);width:15px;height:15px;flex:0 0 auto;cursor:pointer}
 .check.done > span{color:var(--fg-3);text-decoration:line-through}
+/* a switch, not a task: ticking it turns something on */
+.check.plain.done > span{color:var(--fg);text-decoration:none}
 
 .chip{
   display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;

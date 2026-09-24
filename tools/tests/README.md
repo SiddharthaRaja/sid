@@ -26,6 +26,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/text-size.mjs
     node tools/tests/daily-use.mjs
     node tools/tests/enter-to-done.mjs
+    node tools/tests/autocorrect.mjs
 
 ## What each one holds the line on
 
@@ -172,3 +173,25 @@ from an IME, which would make the app unusable in scripts that need one;
 and Enter never presses a Delete button, only a primary one. It also
 checks the obvious thing — that what you typed is actually saved, after
 a reload, rather than merely appearing to be.
+
+**autocorrect.mjs** — the correction rule is a pure function, so most of
+this file is a table: type a string one character at a time and check
+what you are left with. Half the assertions are about what it must NOT
+do. It never touches a #hashtag, an @handle, a URL, a domain, a token
+with a digit in it, or a word already capitalised on purpose; it does
+nothing mid-word, waiting until you finish; and it leaves alone the
+words that are real English somewhere ("its", "lets", "ill", "id",
+"were"), because an autocorrect that is right most of the time is worse
+than one that is right every time.
+
+Two of those rules exist because this suite caught the opposite. A full
+stop used to end a word, which made "sid.app" two words and capitalised
+the first; a colon did the same to "https://x.com". Only whitespace ends
+a word now, and trailing punctuation is trimmed instead. A fixed typo
+also used to lose its sentence capital.
+
+The rest: it runs on real keystrokes in a real field, the caret stays
+where you left it, the corrected text is what gets saved, one undo
+reverses it, both switches work independently and persist, 120 words
+cost under 700ms, and — the one that matters most — opening a
+three-week-old entry does not alter a character of it.

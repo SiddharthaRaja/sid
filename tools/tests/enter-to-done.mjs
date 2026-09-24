@@ -127,7 +127,9 @@ async function openEntry(page, title = 'Diary 5') {
     body: window.Sid.S.get('p_x').content.thread.find(x => x.title === 'Diary 5').body,
   }));
   ok('3 Shift+Enter does not close the sheet', r.open, String(r.open));
-  ok('3b it inserts a real newline', /day 5\nsecond line/.test(r.body), JSON.stringify(r.body));
+  /* autocorrect capitalises the start of a line, so match the break
+     itself rather than the casing of the word after it */
+  ok('3b it inserts a real newline', /day 5\n[Ss]econd line/.test(r.body), JSON.stringify(r.body));
 
   /* and a multi-line entry can still be written the way the diary wants */
   await page.keyboard.down('Shift'); await page.keyboard.press('Enter'); await page.keyboard.up('Shift');

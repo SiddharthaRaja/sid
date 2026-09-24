@@ -3,6 +3,7 @@
    ============================================================ */
 
 import * as S from './store.js';
+import * as AC from './autocorrect.js';
 import { icon } from './icons.js';
 
 /* ---------- dom ---------- */
@@ -190,6 +191,10 @@ export function field(label, obj, key, opts = {}) {
     },
   });
   if (opts.autogrow) setTimeout(() => grow(el), 0);
+  /* Autocorrect rides along on every prose field. It opts itself out
+     of anything that is not text, and `nocorrect: true` turns it off
+     for one field. */
+  if (!opts.nocorrect) AC.attach(el);
   if (!label) return el;
   return h('label', { class: 'field' }, h('span', { class: 'lab', text: label }), el);
 }
@@ -215,7 +220,9 @@ export function selectField(label, obj, key, options, opts = {}) {
 }
 
 export function checkbox(label, obj, key, opts = {}) {
-  const wrap = h('label', { class: `check ${obj[key] ? 'done' : ''}` },
+  /* `plain` marks a switch rather than a task, so ticking it does not
+     cross the label out — "on" is not "done with". */
+  const wrap = h('label', { class: `check ${opts.plain ? 'plain' : ''} ${obj[key] ? 'done' : ''}` },
     h('input', {
       type: 'checkbox', checked: !!obj[key],
       onChange: (e) => {
