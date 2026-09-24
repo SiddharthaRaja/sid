@@ -32,6 +32,22 @@ export function themeMode() {
 
 export const accent = () => S.get('settings').accent || 'ember';
 
+/* How big the interface text is. Every size in the stylesheet is
+   derived from one variable, so this moves the whole scale rather
+   than one label at a time. */
+export const TEXT_SIZES = [
+  ['xs',      'Tiny'],
+  ['compact', 'Compact'],
+  ['normal',  'Normal'],
+  ['large',   'Large'],
+];
+export const textSize = () => S.get('settings').textSize || 'compact';
+export function setTextSize(v) {
+  S.get('settings').textSize = v;
+  S.touch('settings');
+  applyTheme();
+}
+
 /** system → whichever the device is on right now. */
 export function resolvedTheme() {
   const m = themeMode();
@@ -43,6 +59,7 @@ export function applyTheme() {
   const root = document.documentElement;
   root.dataset.theme = t;
   root.dataset.accent = accent();
+  root.dataset.text = textSize();
   document.querySelector('meta[name=theme-color]')
     ?.setAttribute('content', t === 'dark' ? '#000000' : '#f7f6f4');
   // the nav button shows the glyph for what you would switch to

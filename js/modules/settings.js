@@ -14,7 +14,7 @@ import {
   h, clear, btn, card, cardHead, empty, field, modal, subtabs, selectField, toast,
   download, fmtDate, todayISO, confirmDelete, copy,
 } from '../ui.js';
-import { THEME_MODES, ACCENTS, themeMode, accent, setThemeMode, setAccent } from '../theme.js';
+import { THEME_MODES, ACCENTS, TEXT_SIZES, themeMode, accent, textSize, setThemeMode, setAccent, setTextSize } from '../theme.js';
 import * as A from '../assist.js';
 import * as D from '../drive.js';
 import * as PUSH from '../push.js';
@@ -62,6 +62,19 @@ export function renderSettings(sub) {
             class: themeMode() === k ? 'on' : '',
             onClick: () => { setThemeMode(k); draw(); },
           }, label)))),
+
+      card(
+        cardHead('Text size'),
+        h('p', { class: 'small muted' },
+          'Moves the whole interface, not just the body text — labels, headings, buttons and the boxes you type into all scale together.'),
+        h('div', { class: 'seg', style: { marginTop: '4px' } },
+          TEXT_SIZES.map(([k, label]) => h('button', {
+            class: textSize() === k ? 'on' : '',
+            onClick: () => { setTextSize(k); draw(); },
+          }, label))),
+        h('div', { class: 'field', style: { marginTop: '14px' } },
+          h('span', { class: 'lab', text: 'This is what a field label looks like' }),
+          h('input', { class: 'inp', placeholder: 'and this is a box you type into', readOnly: true }))),
 
       card(
         cardHead('Accent'),

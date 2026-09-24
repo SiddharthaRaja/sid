@@ -32,7 +32,16 @@
 
   --r:9px; --r-lg:13px;
   --nav-w:224px;
-  --fs:14px;
+
+  /* One number drives the whole type scale. Settings → Appearance
+     moves it; everything sized below is derived from it rather than
+     hard-coded, so nothing is left behind at the old size. */
+  --fs:13px;
+  --fs-sm:calc(var(--fs) - 1.5px);     /* .small, notes, captions   */
+  --fs-lab:calc(var(--fs) - 2.5px);    /* FIELD LABELS, tags        */
+  --fs-h1:calc(var(--fs) + 6px);
+  --fs-h2:calc(var(--fs) + 3px);
+  --fs-head:calc(var(--fs) + 0.5px);   /* card and modal headings   */
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
   color-scheme:light;
@@ -64,6 +73,12 @@
   --bad-bg:#2c1210;  --bad-fg:#f0a79a;
   color-scheme:dark;
 }
+
+/* ---------- interface text size ---------- */
+[data-text="xs"]      { --fs:11.5px; }
+[data-text="compact"] { --fs:13px; }
+[data-text="normal"]  { --fs:14px; }
+[data-text="large"]   { --fs:15.5px; }
 
 /* ---------- accents ---------- */
 [data-accent="ocean"] {--accent-rgb:59 130 196}
@@ -105,14 +120,14 @@ p{margin:0 0 .7em}
 .btn{
   display:inline-flex;align-items:center;gap:8px;justify-content:center;
   padding:7px 13px;border-radius:var(--r);border:1px solid var(--line);
-  background:var(--bg-2);color:var(--fg);cursor:pointer;font-size:13px;font-weight:500;
+  background:var(--bg-2);color:var(--fg);cursor:pointer;font-size:var(--fs-sm);font-weight:500;
   transition:background .12s,border-color .12s,transform .06s;white-space:nowrap;
 }
 .btn:hover{background:var(--bg-3);border-color:var(--fg-3)}
 .btn:active{transform:translateY(1px)}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-primary:hover{background:#cf5533;border-color:#cf5533}
-.btn-lg{padding:11px 20px;font-size:14px;width:100%}
+.btn-lg{padding:11px 20px;font-size:var(--fs);width:100%}
 .btn-sm{padding:4px 9px;font-size:12px}
 .btn-ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
 .btn-ghost:hover{background:var(--bg-3);color:var(--fg)}
@@ -185,15 +200,15 @@ p{margin:0 0 .7em}
 
 /* ---------- page furniture ---------- */
 .page-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;flex-wrap:wrap}
-.page-head h1{font-size:21px}
-.page-head .sub{color:var(--fg-3);font-size:13px;margin-top:3px}
+.page-head h1{font-size:var(--fs-h1)}
+.page-head .sub{color:var(--fg-3);font-size:var(--fs-sm);margin-top:3px}
 .page-head .spacer{flex:1}
 .page-actions{display:flex;gap:7px;flex-wrap:wrap}
 
 .card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px}
 .card + .card{margin-top:12px}
 .card-head{display:flex;align-items:center;gap:9px;margin:-2px 0 12px}
-.card-head h3{font-size:13.5px}
+.card-head h3{font-size:var(--fs-head)}
 .card-head .spacer{flex:1}
 .grid{display:grid;gap:12px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
@@ -218,13 +233,13 @@ p{margin:0 0 .7em}
 .empty strong{display:block;color:var(--fg-2);font-weight:500;margin-bottom:5px}
 
 .muted{color:var(--fg-3)}
-.small{font-size:12px}
+.small{font-size:var(--fs-sm)}
 .mono{font-family:var(--mono);font-size:12.5px}
 .hr{height:1px;background:var(--line-soft);margin:16px 0;border:0}
 
 /* ---------- forms ---------- */
 .field{display:block;margin-bottom:12px}
-.field > .lab{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+.field > .lab{display:block;font-size:var(--fs-lab);letter-spacing:.06em;text-transform:uppercase;
   color:var(--fg-3);margin-bottom:5px;font-weight:600}
 .inp,textarea.inp,select.inp{
   width:100%;padding:8px 10px;background:var(--bg-inset);color:var(--fg);
@@ -239,7 +254,7 @@ textarea.tall{min-height:132px}
 select.inp{cursor:pointer}
 .inp::placeholder{color:var(--fg-3)}
 .inline-inp{
-  border:none;background:transparent;padding:2px 0;width:100%;outline:none;font-weight:600;font-size:15px;
+  border:none;background:transparent;padding:2px 0;width:100%;outline:none;font-weight:600;font-size:var(--fs-head);
 }
 .inline-inp:focus{border-bottom:1px solid var(--accent-line)}
 
@@ -249,13 +264,13 @@ select.inp{cursor:pointer}
 
 .chip{
   display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;
-  border:1px solid var(--line);background:var(--bg-3);font-size:11.5px;color:var(--fg-2);
+  border:1px solid var(--line);background:var(--bg-3);font-size:var(--fs-lab);color:var(--fg-2);
   cursor:pointer;white-space:nowrap;
 }
 .chip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--fg)}
 .chip .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .tag{display:inline-block;padding:2px 7px;border-radius:5px;background:var(--bg-3);
-  border:1px solid var(--line-soft);font-size:11px;color:var(--fg-2)}
+  border:1px solid var(--line-soft);font-size:var(--fs-lab);color:var(--fg-2)}
 .tag.ok{color:var(--ok)} .tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)} .tag.info{color:var(--info)}
 
 /* ---------- lists ---------- */
@@ -308,7 +323,7 @@ table.tbl tr:hover td{background:var(--bg-3)}
 }
 .modal.wide{max-width:900px}
 .modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line-soft)}
-.modal-head h3{font-size:14.5px;flex:1;min-width:0}
+.modal-head h3{font-size:var(--fs-head);flex:1;min-width:0}
 .modal-body{padding:16px;overflow-y:auto;flex:1}
 .modal-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line-soft);
   flex-wrap:wrap}
@@ -323,7 +338,7 @@ table.tbl tr:hover td{background:var(--bg-3)}
 
 /* ---------- calendar ---------- */
 .cal-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.cal-title{font-weight:600;font-size:15px;min-width:150px}
+.cal-title{font-weight:600;font-size:var(--fs-head);min-width:150px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);
   border-radius:var(--r-lg);overflow:hidden;background:var(--line-soft);gap:1px}
 .cal-dow{background:var(--bg-3);min-width:0;overflow:hidden;padding:6px 8px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
@@ -368,7 +383,7 @@ table.tbl tr:hover td{background:var(--bg-3)}
 
 /* ---------- info prose ---------- */
 .prose{max-width:74ch;font-size:13.5px;line-height:1.72;color:var(--fg-2)}
-.prose h2{font-size:15px;color:var(--fg);margin:26px 0 9px}
+.prose h2{font-size:var(--fs-h2);color:var(--fg);margin:26px 0 9px}
 .prose h2:first-child{margin-top:0}
 .prose h3{font-size:13.5px;color:var(--fg);margin:20px 0 6px}
 .prose ul,.prose ol{margin:0 0 12px;padding-left:20px}
@@ -437,7 +452,7 @@ table.tbl tr:hover td{background:var(--bg-3)}
   .g2{grid-template-columns:1fr}
   .g3,.g4{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
   .stat{padding:10px 11px}
-  .stat .v{font-size:19px;margin-top:4px}
+  .stat .v{font-size:calc(var(--fs) + 5px);margin-top:4px}
   .stat .d{font-size:11px}
   .list{gap:7px}
   .item{padding:10px 11px}
@@ -446,9 +461,14 @@ table.tbl tr:hover td{background:var(--bg-3)}
   .subtabs{margin-bottom:13px}
   .prose li{margin-bottom:4px}
 
-  /* 16px or Safari zooms the whole page in when a field is focused,
-     and never quite zooms back out */
-  .inp,textarea.inp,select.inp{font-size:16px}
+  /* This used to force every field to 16px on every phone. That is
+     an iOS workaround — Safari zooms the page in when you focus a
+     field under 16px and never quite zooms back out — and on Android
+     it just made every form oversized for no reason. Scoped to
+     WebKit-on-iOS now; everywhere else a field is the size you chose. */
+  @supports (-webkit-touch-callout: none) {
+    .inp,textarea.inp,select.inp{font-size:max(16px, var(--fs))}
+  }
 
   /* ---- the keyboard ---- */
   .modal{max-height:calc(100dvh - var(--kb, 0px) - 20px)}
@@ -631,7 +651,8 @@ body.has-player .view{padding-bottom:150px}
 @media (max-width:880px){
   .modal-foot{position:sticky;bottom:0;background:var(--bg-2);
     padding-bottom:calc(12px + env(safe-area-inset-bottom))}
-  .page-head h1{font-size:19px}
+  /* was a hard 19px, which ignored the text-size setting entirely */
+  .page-head h1{font-size:calc(var(--fs) + 5px)}
   .art-title{max-width:none}
 }
 
@@ -972,8 +993,8 @@ pre.pb-code{
 .tile:active{ transform:scale(.985); }
 .tile-ico{ display:block; }
 .tile-ico svg{ width:26px; height:26px; }
-.tile-label{ font-size:15px; font-weight:600; line-height:1.25; }
-.tile-note{ font-size:12px; color:var(--fg-3); line-height:1.3; margin-top:auto; }
+.tile-label{ font-size:var(--fs-head); font-weight:600; line-height:1.25; }
+.tile-note{ font-size:var(--fs-sm); color:var(--fg-3); line-height:1.3; margin-top:auto; }
 .tile-badge{
   position:absolute; top:12px; right:12px;
   background:var(--accent); color:#fff; border-radius:999px;

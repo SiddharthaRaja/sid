@@ -23,6 +23,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/restructure.mjs
     node tools/tests/ui-pass18.mjs
     node tools/tests/diary-fill.mjs
+    node tools/tests/text-size.mjs
 
 ## What each one holds the line on
 
@@ -114,6 +115,13 @@ all three platforms share X's dates; it never runs twice and creates no
 duplicates; a snapshot is taken first; undo removes only slots still
 holding nothing but their number; and with no diary on X to extend,
 nothing is invented anywhere.
+
+**text-size.mjs** — the interface scale. A field is no longer forced to
+16px on every phone (that is an iOS zoom workaround and it made every
+Android form oversized); iOS still gets it, so Safari will not zoom the
+page. The Settings control moves the whole scale — labels, headings,
+captions and inputs together, with nothing left behind at a hard-coded
+size — and the choice survives a reload.
 
 ## The layers, in order of what they survive
 
