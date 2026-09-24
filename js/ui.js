@@ -75,6 +75,10 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
 
+  /* Filled below with the primary action's button, so Enter can press
+     it. Nothing destructive ever ends up here — only `btn-primary`. */
+  let primaryBtn = null;
+
   const foot = h('div', { class: 'modal-foot' });
   actions.forEach(a => {
     if (a === 'spacer') { foot.append(h('div', { class: 'spacer' })); return; }
@@ -107,6 +111,7 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
         if (r !== false && !a.keepOpen) close();
       },
     }, a.label);
+    if (/btn-primary/.test(a.cls || '') && !danger) primaryBtn = el;
     foot.append(el);
   });
 
@@ -117,6 +122,38 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
     h('div', { class: 'modal-body' }, body),
     actions.length ? foot : null,
   );
+  /* ---- Enter means done -------------------------------------------
+     In a sheet you opened to write one thing, Enter finishing it is
+     the shape every messaging app has trained into your hands, and
+     reaching for a Done button at the bottom of a phone screen is
+     not. So Enter saves and closes; Shift+Enter is the new line.
+
+     Only inside a sheet. A textarea on a page — the notes panel, a
+     lyric section in Notepad — has no "done" to mean, so Enter there
+     stays an ordinary newline.
+
+     Left alone deliberately: anything mid-composition (an IME is
+     using Enter to choose a candidate — stealing it would make the
+     app unusable in a script that needs one), Enter with a modifier,
+     a <select>, and any field that opts out with
+     data-enter="newline". Everything is already saved as you type;
+     the blur below just flushes the last keystroke first. */
+  box.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.isComposing || e.keyCode === 229) return;
+
+    const t = e.target;
+    const tag = (t.tagName || '').toLowerCase();
+    if (tag !== 'textarea' && tag !== 'input') return;
+    if (t.dataset && t.dataset.enter === 'newline') return;
+    if (tag === 'input' && /^(checkbox|radio|button|submit|file|range)$/.test(t.type)) return;
+
+    e.preventDefault();
+    t.blur();                         // let the input handler land first
+    if (primaryBtn) primaryBtn.click();
+    else close();
+  });
+
   root.append(box);
   root.onclick = (e) => { if (e.target === root) close(); };
   setTimeout(() => box.querySelector('input,textarea,select')?.focus(), 30);

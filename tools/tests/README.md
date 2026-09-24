@@ -25,6 +25,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/diary-fill.mjs
     node tools/tests/text-size.mjs
     node tools/tests/daily-use.mjs
+    node tools/tests/enter-to-done.mjs
 
 ## What each one holds the line on
 
@@ -160,3 +161,14 @@ outright — no unload, no goodbye — and everything is still there after a
 reload, which means something here only because the harness seeds once
 instead of on every navigation. A fresh install with no diary and no
 release date is told nothing is due, because nothing is.
+
+**enter-to-done.mjs** — Enter finishes an editor sheet and Shift+Enter is
+the new line, which is the shape every messaging app has trained into
+your hands. It holds the line on where that must NOT happen: a textarea
+on a page (the notes panel, a lyric section in Notepad) still takes a
+plain Enter, because there is no "done" for it to mean; Ctrl, Alt and
+Cmd+Enter are left alone; an Enter arriving mid-composition is not stolen
+from an IME, which would make the app unusable in scripts that need one;
+and Enter never presses a Delete button, only a primary one. It also
+checks the obvious thing — that what you typed is actually saved, after
+a reload, rather than merely appearing to be.
