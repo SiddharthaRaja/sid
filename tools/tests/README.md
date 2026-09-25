@@ -27,6 +27,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/daily-use.mjs
     node tools/tests/enter-to-done.mjs
     node tools/tests/autocorrect.mjs
+    node tools/tests/typing-latency.mjs
 
 ## What each one holds the line on
 
@@ -195,3 +196,28 @@ where you left it, the corrected text is what gets saved, one undo
 reverses it, both switches work independently and persist, 120 words
 cost under 700ms, and — the one that matters most — opening a
 three-week-old entry does not alter a character of it.
+
+**typing-latency.mjs** — typing felt laggy on a desktop and fine on a
+phone. It was not a slow function: the JavaScript behind a keystroke
+measured 1.2ms, the DOM was 679 nodes, and autogrow's forced layout cost
+0.05ms. It was one CSS property. `.modal-root` carried
+`backdrop-filter: blur(3px)`, so every frame that changed anything above
+it made the compositor re-blur the whole viewport — and while you are
+typing in a sheet, that is every keystroke. On a 1680x1050 window it
+cost 40ms a keypress: 56ms with the blur, 16.7ms without. 16.7ms is one
+frame, and it is also exactly what a bare textarea on a blank page
+costs. The cost scales with the area blurred, which is why a phone
+never showed it.
+
+The budget this file holds: a keystroke in the app's editor must cost no
+more than the same keystroke in a bare textarea created beside it, on
+the same page, with the same text. It also refuses a `backdrop-filter`
+on any surface you type into, reading the rule rather than the element
+so it is caught even when nothing of that kind is on screen.
+
+It carries one unrelated guard, because a screenshot found what the
+route sweep could not: `.append()` is the native DOM method, and handed
+a `null` it appends the *string* "null" into the middle of the sheet. An
+optional row that is sometimes absent is exactly where that happens, so
+the file opens an editor on eight platforms and walks the text nodes
+looking for a bare "null" or "undefined".

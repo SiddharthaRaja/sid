@@ -411,7 +411,11 @@ export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, o
   };
   drawVariant();
 
-  body.append(
+  /* .append() is the native DOM one: handed a null it appends the
+     STRING "null" and puts the word in the middle of the sheet. Every
+     optional row below can legitimately be null, so they are filtered
+     out rather than trusted. */
+  body.append(...[
     field('Title / label', item, 'title', { slice, placeholder: 'Internal name — not posted' }),
     h('label', { class: 'field' },
       h('span', { class: 'lab', text: type.limit ? `Text (limit ${type.limit})` : 'Text' }),
@@ -430,7 +434,7 @@ export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, o
     type.media !== false ? h('label', { class: 'field' },
       h('span', { class: 'lab', text: 'Attachments' }), mediaBlock(item, slice, pathHint)) : null,
     field('Notes', item, 'notes', { slice, multiline: true, placeholder: 'Anything you need to remember about this one' }),
-  );
+  ].filter(Boolean));
 
   return modal({
     title: item.title || `New ${type.label.replace(/s$/, '').toLowerCase()}`,
