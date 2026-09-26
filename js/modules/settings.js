@@ -625,6 +625,12 @@ export function renderSettings(sub) {
           + 'Two different numbers on that line is ambiguous, so it asks rather than guesses.'));
     }
 
+    if (plan.bodiesChanged) {
+      body.append(h('p', { class: 'small', style: { marginTop: '10px' } },
+        `The number on the first line of the text moves too — ${plan.bodiesChanged} of them. `
+        + 'Nothing else in the writing is touched, and the hashtag at the foot stays where you put it.'));
+    }
+
     if (plan.datesChanged) {
       body.append(h('p', { class: 'small', style: { marginTop: '10px' } },
         `The dates follow the numbers: ${plan.datesChanged} move. `
@@ -649,11 +655,14 @@ export function renderSettings(sub) {
         h('div', { class: 'item-body mono', text: r.line || '(no last line)' }),
         h('div', { class: 'item-meta' },
           h('span', { text: dateMoved ? `${r.from} → ${r.to_when}` : (r.from || 'no date') }),
+          r.bodyFrom != null && r.bodyFrom !== r.bodyTo
+            ? h('span', { text: `first line ${r.bodyFrom} → ${r.bodyTo}` })
+            : null,
           r.why ? h('span', { text: r.why }) : null,
           !titleMoved && !dateMoved ? h('span', { text: 'unchanged' }) : null));
     })));
 
-    if (!moved.length && !plan.datesChanged) {
+    if (!moved.length && !plan.datesChanged && !plan.bodiesChanged) {
       body.append(h('p', { class: 'small muted', style: { marginTop: '10px' },
         text: plan.byHash
           ? 'Every title already matches its hashtag, and the dates are already in that order — nothing to change.'
@@ -664,7 +673,7 @@ export function renderSettings(sub) {
       title: 'Renumber the X diary',
       body,
       wide: true,
-      actions: (moved.length || plan.datesChanged)
+      actions: (moved.length || plan.datesChanged || plan.bodiesChanged)
         ? [
             { label: 'Cancel' },
             { label: moved.length
@@ -675,6 +684,7 @@ export function renderSettings(sub) {
                 const r = DIARY.renumber('x', 'thread');
                 const bits = [];
                 if (r.applied) bits.push(`${r.applied} retitled`);
+                if (r.bodies) bits.push(`${r.bodies} first lines renumbered`);
                 if (r.redated) bits.push(`${r.redated} re-dated`);
                 if (r.cleared) bits.push(`${r.cleared} empty slots cleared`);
                 toast(bits.length ? bits.join(', ') + ' — the run is back in order' : 'Nothing to change', 4500);

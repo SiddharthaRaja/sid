@@ -331,6 +331,29 @@ export function hashNo(body) {
  * Returns the reason when there is no number, so the screen can say
  * what it read instead of silently doing nothing.
  */
+/**
+ * The number on the FIRST line of an entry.
+ *
+ * His entries are written number-first: line one is the entry's
+ * number on its own, then the writing, then the tags. So renumbering
+ * that changes the title and leaves that line alone produces an entry
+ * titled "Diary 17" whose first line still reads 3 — which is what
+ * "it still doesn't work" looks like from the inside.
+ */
+export function bodyNo(body) {
+  const first = String(body || '').split('\n')[0].trim();
+  return /^\d{1,3}$/.test(first) ? parseInt(first, 10) : null;
+}
+
+/** Rewrite that first line to n. Anything that is not a bare number
+    on its own line is left exactly as it is. */
+export function renumberBody(body, n) {
+  const lines = String(body == null ? '' : body).split('\n');
+  if (!/^\s*\d{1,3}\s*$/.test(lines[0] || '')) return body;
+  lines[0] = String(n);
+  return lines.join('\n');
+}
+
 export function readTag(body) {
   const text = String(body || '').replace(/\s+$/, '');
   if (!text) return { n: null, why: 'empty', line: '' };
@@ -431,7 +454,8 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
   const rows = live.map(it => {
     const a = assigned.get(it.id);
     return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why,
-             line: lineOf.get(it.id) || '' };
+             line: lineOf.get(it.id) || '',
+             bodyFrom: bodyNo(it.body), bodyTo: bodyNo(it.body) == null ? null : a.n };
   }).sort((x, y) => x.n - y.n);
 
   /* The dates follow the numbers.
@@ -487,6 +511,7 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
     blanks,
     dates,
     datesChanged,
+    bodiesChanged: rows.filter(r => r.bodyFrom != null && r.bodyFrom !== r.bodyTo).length,
     count: live.length,
     /* What the last line of the first few unnumbered entries actually
        says. When nothing is found, showing this beats saying "0
@@ -503,9 +528,15 @@ export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
   const list = itemsOf(pKey, tKey);
   const to = new Map(plan.rows.map(r => [r.id, r.to]));
   const when = redate ? new Map(plan.dates.map(d => [d.id, d.to])) : new Map();
+  const num = new Map(plan.rows.map(r => [r.id, r.n]));
   list.forEach(it => {
     const t = to.get(it.id);
-    if (t) it.title = t;
+    if (t) {
+      it.title = t;
+      /* and the number on the first line, which is the one you
+         actually read when the entry is open */
+      it.body = renumberBody(it.body, num.get(it.id));
+    }
     /* dates move with the numbers, never onto a fixed calendar date */
     const w = when.get(it.id);
     if (w !== undefined && !it.fixedDate) it.when = w;
@@ -521,5 +552,6 @@ export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
   reorderDiaries(keep);
   S.touch(`p_${pKey}`);
 
-  return { ...plan, applied: plan.changed, redated: redate ? plan.datesChanged : 0, cleared };
+  return { ...plan, applied: plan.changed, redated: redate ? plan.datesChanged : 0,
+           bodies: plan.bodiesChanged, cleared };
 }

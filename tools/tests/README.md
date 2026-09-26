@@ -257,3 +257,22 @@ run forwards, the lowest number holds the earliest day, a fixed
 calendar date is left out of the shuffle, and `redate: false` retitles
 without touching a date. One more checks the thing a store-level test
 cannot: after a reload, the X screen itself lists them in the new order.
+
+Renumbering also rewrites the number on the FIRST line of the entry.
+The entries are written number-first — line one is the number on its
+own, then the writing, then the tags — so a renumber that changed the
+title and left that line alone produced an entry titled "Diary 17"
+whose text still opened with 3. From the inside that looks exactly like
+nothing happened, which is how it was reported twice. The case in this
+file is the real entry, verbatim: title "Diary 3", first line "3", tag
+"#17", dated T-28. All three end up saying 17 and the date lands on
+T-14, where the seventeenth entry belongs. The writing between them and
+the hashtag at the foot are untouched, and a first line that is prose
+rather than a bare number is never overwritten.
+
+One fixture bug here found a real one: the fixture wrote "T14" instead
+of "T+14" and those entries silently dropped out of the re-date,
+because `offsetOf` required the sign. The app always writes it, but a
+hand-typed value would not, so `offsetOf` now accepts either. That is
+strictly more permissive — nothing that parsed before parses
+differently.

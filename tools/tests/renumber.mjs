@@ -302,6 +302,91 @@ async function boot(items) {
   await ctx.close();
 }
 
+/* ---- 9. his actual entry, exactly as it appears on screen -------
+   Title "Diary 3", first line "3", tag "#17" at the foot, dated T-28.
+   All three of those have to end up saying 17, and the date has to
+   land where the seventeenth entry belongs. */
+{
+  const run = [];
+  let o = -30;
+  for (let i = 1; i <= 45; i++) {
+    run.push({
+      id: 'e' + i, title: `Diary ${i}`,
+      /* number on line one, writing, then the real number as a tag —
+         shuffled so entry i actually belongs at 46 - i */
+      body: `${i}\nsomething I wrote on day ${i}\n#${46 - i}`,
+      /* written the way the app writes them: the sign is always there */
+      status: 'draft', when: (o < 0 ? `T${o++}` : `T+${o++}`), tags: '', notes: '', media: [],
+    });
+  }
+  /* the one from the screenshot, verbatim */
+  run[2] = { id: 'shot', title: 'Diary 3',
+    body: '3\nIt has been over a week since I last video called her\n#17',
+    status: 'draft', when: 'T-28', tags: '', notes: '', media: [] };
+
+  const { ctx, page } = await boot(run);
+  const r = await page.evaluate(async () => {
+    const D = await import('./js/diary.js');
+    const S = window.Sid.S;
+    D.renumber('x', 'thread');
+    await new Promise(z => setTimeout(z, 800));
+    const it = S.get('p_x').content.thread.find(x => x.id === 'shot');
+    const all = S.get('p_x').content.thread;
+    const off = (w) => { const m = String(w).match(/^T([+-]?\d+)?$/); return m ? (m[1] ? +m[1] : 0) : null; };
+    return {
+      title: it.title,
+      firstLine: it.body.split('\n')[0],
+      lastLine: it.body.split('\n').slice(-1)[0],
+      middle: it.body.split('\n')[1],
+      when: it.when,
+      /* where T-28 sat before, and where the 17th entry sits now */
+      seventeenth: off(all.find(x => D.diaryNo(x.title) === 17).when),
+      everyFirstLineMatches: all.every(x => {
+        const n = D.diaryNo(x.title);
+        const b = x.body.split('\n')[0].trim();
+        return !/^\d+$/.test(b) || +b === n;
+      }),
+    };
+  });
+
+  ok('9 the title becomes Diary 17', r.title === 'Diary 17', r.title);
+  ok('9b the first line of the text becomes 17', r.firstLine === '17', JSON.stringify(r.firstLine));
+  ok('9c the writing itself is untouched',
+    r.middle === 'It has been over a week since I last video called her', JSON.stringify(r.middle));
+  ok('9d the hashtag at the foot stays put', r.lastLine === '#17', JSON.stringify(r.lastLine));
+  ok('9e it is no longer on T-28', r.when !== 'T-28', r.when);
+  ok('9f it moves to where the seventeenth entry belongs \u2014 T-14',
+    r.when === 'T-14', `${r.when} (17th slot is T${r.seventeenth})`);
+  ok('9g and across all 45, every first line agrees with its title',
+    r.everyFirstLineMatches, String(r.everyFirstLineMatches));
+  await ctx.close();
+}
+
+/* ---- 10. a first line that is not a bare number is left alone ---- */
+{
+  const { ctx, page } = await boot([
+    { id: 'p', title: 'Diary 1', body: 'Not a number up here\nbody\n#9',
+      status: 'draft', when: 'T-30', tags: '', notes: '', media: [] },
+    { id: 'q', title: 'Diary 2', body: '2\nbody\n#4',
+      status: 'draft', when: 'T-29', tags: '', notes: '', media: [] },
+  ]);
+  const r = await page.evaluate(async () => {
+    const D = await import('./js/diary.js');
+    D.renumber('x', 'thread');
+    await new Promise(z => setTimeout(z, 600));
+    const list = window.Sid.S.get('p_x').content.thread;
+    return {
+      prose: list.find(x => x.id === 'p').body.split('\n')[0],
+      numbered: list.find(x => x.id === 'q').body.split('\n')[0],
+      proseTitle: list.find(x => x.id === 'p').title,
+    };
+  });
+  ok('10 a prose first line is never overwritten', r.prose === 'Not a number up here', r.prose);
+  ok('10b but its title still changes', r.proseTitle === 'Diary 9', r.proseTitle);
+  ok('10c and a numbered first line does move', r.numbered === '4', r.numbered);
+  await ctx.close();
+}
+
 await browser.close();
 let bad = 0;
 for (const [pass, name, detail] of results) {

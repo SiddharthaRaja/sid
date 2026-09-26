@@ -7,9 +7,12 @@
    so they always group the same way.
    ============================================================ */
 
-/** "T-28" → -28, "T" → 0, "T+14" → 14, anything else → null. */
+/** "T-28" → -28, "T" → 0, "T+14" → 14, anything else → null.
+    "T14" without the plus counts too: the app always writes the sign,
+    but a hand-typed value without it used to read as undated, which
+    quietly dropped that entry out of anything working from offsets. */
 export function offsetOf(when) {
-  const m = String(when || '').trim().match(/^T\s*([+-]\s*\d+)?$/i);
+  const m = String(when || '').trim().match(/^T\s*([+-]?\s*\d+)?$/i);
   if (!m) return null;
   return m[1] ? parseInt(m[1].replace(/\s/g, ''), 10) : 0;
 }
