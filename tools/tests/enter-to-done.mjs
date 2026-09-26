@@ -168,24 +168,28 @@ async function openEntry(page, title = 'Diary 5') {
   await ctx.close();
 }
 
-/* ---- 5. the title field too ------------------------------------- */
+/* ---- 5. a single-line field too ----------------------------------
+   Tags rather than the title: the text platforms have no title box
+   any more, so Tags is the single-line field actually on this sheet. */
 {
   const { ctx, page } = await boot();
   await openEntry(page);
   const r = await page.evaluate(async () => {
-    const inp = [...document.querySelectorAll('.modal input')].find(i => i.type === 'text');
-    inp.focus(); inp.value = 'Diary 5 renamed';
+    const inp = [...document.querySelectorAll('.modal input')]
+      .find(i => /hook, bts/.test(i.placeholder || ''));
+    if (!inp) return { found: false };
+    inp.focus(); inp.value = 'mix, bts';
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     await new Promise(r => setTimeout(r, 300));
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await new Promise(r => setTimeout(r, 700));
-    return {
-      open: !!document.querySelector('.modal'),
-      title: window.Sid.S.get('p_x').content.thread.find(x => x.id === 'd5').title,
-    };
+    const it = window.Sid.S.get('p_x').content.thread.find(x => x.id === 'd5');
+    return { found: true, open: !!document.querySelector('.modal'), tags: it.tags, title: it.title };
   });
-  ok('5 Enter in a single-line field also finishes', !r.open, String(r.open));
-  ok('5b and that field is saved too', r.title === 'Diary 5 renamed', r.title);
+  ok('5 Enter in a single-line field also finishes', r.found && !r.open, JSON.stringify(r));
+  ok('5b and that field is saved too', r.tags === 'mix, bts', String(r.tags));
+  ok('5c and the title is untouched — there is no box for it here',
+    r.title === 'Diary 5', String(r.title));
   await ctx.close();
 }
 

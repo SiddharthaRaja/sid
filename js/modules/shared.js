@@ -12,6 +12,7 @@ import {
 } from '../ui.js';
 import { icon } from '../icons.js';
 import { offsetOf } from '../phases.js';
+import { PLATFORMS } from '../data/platforms.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
 import { writingAids } from './compose.js';
 import { mediaFromUrl } from '../drive.js';
@@ -416,8 +417,20 @@ export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, o
      STRING "null" and puts the word in the middle of the sheet. Every
      optional row below can legitimately be null, so they are filtered
      out rather than trusted. */
+  /* On the text platforms a post has no name — it is just the text.
+     The title box was one more thing to skip past every time, so it
+     is not shown there.
+
+     It is HIDDEN, never cleared: `item.title` is what carries "Diary
+     17", and the numbering, the ordering and the renumber all read
+     it. Nothing below writes to title on these platforms, so an entry
+     that has one keeps it exactly as it is. */
+  const textOnly = PLATFORMS.some(p => p.key === pkey && p.group === 'Text');
+
   body.append(...[
-    field('Title / label', item, 'title', { slice, placeholder: 'Internal name — not posted' }),
+    textOnly
+      ? null
+      : field('Title / label', item, 'title', { slice, placeholder: 'Internal name — not posted' }),
     h('label', { class: 'field' },
       h('span', { class: 'lab', text: type.limit ? `Text (limit ${type.limit})` : 'Text' }),
       bodyInput, counter, gaps),

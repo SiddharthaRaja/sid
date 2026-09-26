@@ -30,6 +30,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/typing-latency.mjs
     node tools/tests/renumber.mjs
     node tools/tests/order-by-date.mjs
+    node tools/tests/no-title-on-text.mjs
 
 ## What each one holds the line on
 
@@ -290,3 +291,17 @@ content list, not just the diary.
 The assertion that matters most: the stored order is untouched. This
 is how the list is READ, not a rewrite of your data, so there is
 nothing to undo and nothing that can be lost if it is wrong.
+
+**no-title-on-text.mjs** — on X, Threads and Bluesky a post has no
+name, it is just the text, so the Title / label box is not shown
+there. Everywhere else still has it.
+
+The box is HIDDEN, never cleared, and most of this file is about that
+one distinction. `item.title` is what carries "Diary 17": the
+numbering reads it, the ordering reads it, the renumber reads and
+writes it. So the tests open an entry on each of the three platforms,
+edit the text, close the sheet, reload, and check every title is
+character-for-character what it was — not blanked, not rewritten — and
+that diaryNo() still reads 1, 2, 3 off them afterwards. A new post
+saves with an empty title, as it always did, and the list row falls
+back to showing its text.
