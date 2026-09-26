@@ -548,6 +548,75 @@ export function renderSettings(sub) {
     return card(cardHead('Keeping this app’s data'), line, actions);
   }
 
+  /* Retitle the X diary from the "#n" at the foot of each entry.
+
+     The titles went on in the order the entries were written; the
+     number they should carry is the hashtag at the bottom of the
+     entry itself. Shown as a before → after list first, because this
+     renames real writing and there is no undo for it. */
+  function renumberModal() {
+    const plan = DIARY.renumberPlan('x', 'thread');
+    if (!plan.ok) { toast(plan.reason, 4000); return; }
+
+    const moved = plan.rows.filter(r => r.was !== r.to);
+    const body = h('div');
+
+    body.append(h('p', { class: 'small' },
+      `${plan.count} written ${plan.count === 1 ? 'entry' : 'entries'} on X — `
+      + `${plan.byHash} carrying a hashtag`
+      + (plan.tail
+          ? `, and ${plan.tail} without one, which go last as ${plan.tailFrom}–${plan.tailTo}.`
+          : '.')));
+
+    if (plan.dupes.length) {
+      body.append(h('p', { class: 'small', style: { color: 'var(--warn)' } },
+        `Two entries claim the same number (${plan.dupes.map(d => '#' + d.n).join(', ')}). `
+        + 'The first one in the list keeps it; the other goes to the end with the unnumbered ones. '
+        + 'Fix the hashtag and run this again if that is the wrong way round.'));
+    }
+    if (plan.gaps.length) {
+      body.append(h('p', { class: 'small muted' },
+        `Missing from the hashtags: ${plan.gaps.map(n => '#' + n).join(', ')}. `
+        + 'Left as gaps — the numbers are yours, this only reads them.'));
+    }
+    if (plan.blanks) {
+      body.append(h('p', { class: 'small muted' },
+        `${plan.blanks} empty slots stay as they are`
+        + (plan.collides
+            ? `, except ${plan.collides} sitting on a number a written entry now takes — those are removed. `
+            : '. ')
+        + 'Once the written run is numbered, clear the empty ones and lay them out again so they follow on from it.'));
+    }
+
+    if (!moved.length) {
+      body.append(h('p', { class: 'small muted', text: 'Every title already matches its hashtag — nothing to change.' }));
+    } else {
+      body.append(h('div', { class: 'list', style: { marginTop: '10px' } }, moved.map(r =>
+        h('div', { class: 'item' },
+          h('div', { class: 'item-head' },
+            h('span', { class: 'item-title', text: `${r.was} → ${r.to}` }),
+            r.via === 'tail'
+              ? h('span', { class: 'small muted', text: r.why })
+              : null)))));
+    }
+
+    modal({
+      title: 'Renumber the X diary',
+      body,
+      wide: true,
+      actions: moved.length
+        ? [
+            { label: 'Cancel' },
+            { label: `Retitle ${moved.length}`, cls: 'btn-primary', onClick: () => {
+              const r = DIARY.renumber('x', 'thread');
+              toast(r.applied ? `${r.applied} entries retitled and put back in order` : 'Nothing to change', 4000);
+              draw();
+            } },
+          ]
+        : [{ label: 'Close' }],
+    });
+  }
+
   function diaryCard() {
     const plan = DIARY.preview();
     const box = h('div');
@@ -578,6 +647,7 @@ export function renderSettings(sub) {
         `Numbered slots waiting for each entry, on all three text platforms, dated from the run already written on X — entry ${DIARY.DIARY_TARGET} lands on ${plan.endWhen}. Writing one is opening it and typing.`),
       box,
       h('div', { class: 'row', style: { marginTop: '12px' } },
+        btn('Renumber X from the hashtags', renumberModal, { cls: 'btn-sm btn-ghost' }),
         btn('Undo the empty ones', () => confirmDelete('every diary slot that has not been written in', () => {
           const n = DIARY.undo();
           toast(n ? `${n} empty slots removed` : 'Nothing to remove — they have all been written in', 4000);

@@ -286,3 +286,139 @@ export function undo() {
   });
   return removed;
 }
+
+/* ============================================================
+   Renumbering a track from the hashtag at the foot of each entry
+
+   The titles were typed in the order the entries were written —
+   Diary 1, Diary 2, Diary 3 — and the number they should actually
+   carry is the "#27" sitting at the bottom of the entry itself. This
+   reads that hashtag, retitles from it, and puts everything that has
+   no hashtag after the highest number there is, in the order it is
+   already in.
+
+   Three rules, because this renames real writing:
+     • it only ever retitles and reorders. No body is edited, no
+       entry is removed, and the hashtag stays where it is.
+     • entries that are still blank scaffolding are left alone — they
+       are not part of the run. The only exception is a blank slot
+       sitting on a number a written entry now takes: that one is
+       removed, because two entries cannot share a title and an empty
+       slot is scaffolding, not writing.
+     • it is idempotent. Run it twice and the second run finds
+       nothing to do.
+   ============================================================ */
+
+/** "#27" on the last line of a body → 27. Anything else → null. */
+export function hashNo(body) {
+  const m = String(body || '').trimEnd().match(/#\s*(\d{1,3})\s*$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= 999 ? n : null;
+}
+
+/** Diary entries in number order, non-diary items left where they sit. */
+function reorderDiaries(list) {
+  const slots = [];
+  const picked = [];
+  list.forEach((it, i) => {
+    if (diaryNo(it.title) != null) { slots.push(i); picked.push(it); }
+  });
+  picked.sort((a, b) => diaryNo(a.title) - diaryNo(b.title));
+  slots.forEach((i, k) => { list[i] = picked[k]; });
+}
+
+/**
+ * What renumbering would do, without doing it.
+ *
+ * First hashtag to claim a number keeps it — a second entry carrying
+ * the same "#n" is not silently overwritten, it goes to the tail with
+ * the unnumbered ones and is reported. Gaps in the hashtags are left
+ * as gaps rather than closed up: the numbers are yours, this only
+ * reads them.
+ */
+export function renumberPlan(pKey = 'x', tKey = 'thread') {
+  const list = itemsOf(pKey, tKey);
+  const diaries = list.filter(it => diaryNo(it.title) != null);
+  if (!diaries.length) {
+    return { ok: false, reason: 'No entries titled "Diary …" here, so there is nothing to renumber.' };
+  }
+
+  /* Blank scaffolding is not part of the run — it keeps its number
+     and stays out of this entirely. */
+  const live = diaries.filter(it => written(it));
+  const blanks = diaries.length - live.length;
+  if (!live.length) {
+    return { ok: false, reason: 'Every entry here is still an empty slot, so there is nothing to renumber yet.' };
+  }
+
+  const taken = new Map();                        // number → entry
+  const tail = [];                                // in the order they already sit
+  const dupes = [];
+
+  live.forEach(it => {
+    const n = hashNo(it.body);
+    if (n == null) { tail.push({ it, why: 'no hashtag at the bottom' }); return; }
+    if (taken.has(n)) { dupes.push({ n, was: it.title }); tail.push({ it, why: `#${n} was already claimed` }); return; }
+    taken.set(n, it);
+  });
+
+  const hi = taken.size ? Math.max(...taken.keys()) : 0;
+  let next = hi + 1;
+
+  const assigned = new Map();
+  taken.forEach((it, n) => assigned.set(it.id, { n, via: 'hashtag' }));
+  tail.forEach(({ it, why }) => assigned.set(it.id, { n: next++, via: 'tail', why }));
+
+  const rows = live.map(it => {
+    const a = assigned.get(it.id);
+    return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why };
+  }).sort((x, y) => x.n - y.n);
+
+  const gaps = [];
+  for (let n = 1; n <= hi; n++) if (!taken.has(n)) gaps.push(n);
+
+  /* An empty slot sitting on a number a written entry is about to
+     take would leave two entries with the same title. The slot is
+     scaffolding this app made, so it goes rather than the writing. */
+  const claimed = new Set(rows.map(r => r.n));
+  const collides = diaries.filter(it =>
+    !written(it) && it.gen && claimed.has(diaryNo(it.title))).length;
+
+  return {
+    ok: true,
+    rows,
+    collides,
+    changed: rows.filter(r => r.was !== r.to).length,
+    byHash: taken.size,
+    tail: tail.length,
+    tailFrom: tail.length ? hi + 1 : null,
+    tailTo: tail.length ? next - 1 : null,
+    dupes,
+    gaps,
+    blanks,
+    count: live.length,
+  };
+}
+
+/** Retitle from the hashtags and put the run back in order. */
+export function renumber(pKey = 'x', tKey = 'thread') {
+  const plan = renumberPlan(pKey, tKey);
+  if (!plan.ok) return plan;
+
+  const list = itemsOf(pKey, tKey);
+  const to = new Map(plan.rows.map(r => [r.id, r.to]));
+  list.forEach(it => { const t = to.get(it.id); if (t) it.title = t; });
+
+  const claimed = new Set(plan.rows.map(r => r.n));
+  const keep = list.filter(it => !(
+    !to.has(it.id) && it.gen && !written(it)
+    && diaryNo(it.title) != null && claimed.has(diaryNo(it.title))));
+  const cleared = list.length - keep.length;
+
+  S.get(`p_${pKey}`).content[tKey] = keep;
+  reorderDiaries(keep);
+  S.touch(`p_${pKey}`);
+
+  return { ...plan, applied: plan.changed, cleared };
+}
