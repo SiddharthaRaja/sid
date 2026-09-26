@@ -221,6 +221,87 @@ async function boot(items) {
   await ctx.close();
 }
 
+/* ---- 6. the dates follow the numbers --------------------------- */
+{
+  const { ctx, page } = await boot(entries());
+  const r = await page.evaluate(async () => {
+    const D = await import('./js/diary.js');
+    const S = window.Sid.S;
+    const before = S.get('p_x').content.thread.map(i => ({ t: i.title, w: i.when }));
+    D.renumber('x', 'thread');
+    await new Promise(z => setTimeout(z, 700));
+    const after = S.get('p_x').content.thread.map(i => ({ t: i.title, w: i.when, n: D.diaryNo(i.title) }));
+    const off = (w) => { const m = String(w).match(/^T([+-]?\d+)?$/); return m ? (m[1] ? +m[1] : 0) : null; };
+    return {
+      beforeDates: before.map(x => x.w).sort((a, b) => off(a) - off(b)),
+      afterDates: after.map(x => x.w).sort((a, b) => off(a) - off(b)),
+      pairs: after.map(x => [x.n, off(x.w)]).sort((a, b) => a[0] - b[0]),
+    };
+  });
+  ok('6 not one date is invented or dropped \u2014 the same days come back',
+    JSON.stringify(r.beforeDates) === JSON.stringify(r.afterDates),
+    JSON.stringify({ b: r.beforeDates, a: r.afterDates }));
+
+  const nums = r.pairs.map(p => p[0]);
+  const offs = r.pairs.map(p => p[1]);
+  ok('6b sorted by number, the dates now run forwards',
+    JSON.stringify(offs) === JSON.stringify([...offs].sort((a, b) => a - b)),
+    JSON.stringify(r.pairs));
+  ok('6c the lowest number holds the earliest day',
+    offs[0] === Math.min(...offs), JSON.stringify(r.pairs.slice(0, 3)));
+  ok('6d and every entry still has a date', offs.every(o => o !== null), JSON.stringify(offs));
+  ok('6e numbers are still unique and ascending',
+    JSON.stringify(nums) === JSON.stringify([...new Set(nums)].sort((a, b) => a - b)),
+    JSON.stringify(nums));
+  await ctx.close();
+}
+
+/* ---- 7. re-dating can be turned off ----------------------------- */
+{
+  const { ctx, page } = await boot(entries());
+  const r = await page.evaluate(async () => {
+    const D = await import('./js/diary.js');
+    const S = window.Sid.S;
+    const before = new Map(S.get('p_x').content.thread.map(i => [i.id, i.when]));
+    D.renumber('x', 'thread', { redate: false });
+    await new Promise(z => setTimeout(z, 600));
+    const list = S.get('p_x').content.thread;
+    return {
+      same: list.every(i => before.get(i.id) === i.when),
+      retitled: list.some(i => i.title === 'Diary 27'),
+    };
+  });
+  ok('7 with re-dating off the titles still change', r.retitled, String(r.retitled));
+  ok('7b and not one date moves', r.same, String(r.same));
+  await ctx.close();
+}
+
+/* ---- 8. the reorder is what the X screen actually shows ---------- */
+{
+  const { ctx, page } = await boot(entries());
+  await page.evaluate(async () => {
+    const D = await import('./js/diary.js');
+    D.renumber('x', 'thread');
+    await new Promise(z => setTimeout(z, 900));
+  });
+  /* reload, then look at the rendered list rather than the store */
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.Sid && !document.querySelector('#app').hidden, null, { timeout: 25000 });
+  await page.waitForTimeout(1200);
+  const shown = await page.evaluate(async () => {
+    location.hash = '#/p/x/thread';
+    await new Promise(r => setTimeout(r, 1400));
+    return [...document.querySelectorAll('#view .item-title')].map(t => t.textContent);
+  });
+  const nums = shown.map(t => { const m = t.match(/Diary (\d+)/); return m ? +m[1] : null; }).filter(n => n != null);
+  ok('8 the X screen lists them in the new number order',
+    nums.length > 0 && JSON.stringify(nums) === JSON.stringify([...nums].sort((a, b) => a - b)),
+    JSON.stringify(shown));
+  ok('8b and the renumbered title is on screen',
+    shown.includes('Diary 27'), JSON.stringify(shown));
+  await ctx.close();
+}
+
 await browser.close();
 let bad = 0;
 for (const [pass, name, detail] of results) {

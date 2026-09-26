@@ -245,3 +245,15 @@ The last group is about the screen rather than the rule: when nothing is
 found it has to say so and show the line it actually looked at. "0
 carrying a hashtag" reports the result and hides the cause, which is how
 this shipped looking like it was broken.
+
+Renumbering also moves the dates (same file). Retitling on its own left
+entry 27 sitting on the day entry 1 used to have, so the run read
+backwards — and the scheduler works the cadence out from this very run,
+so it would learn nonsense from it. No date is calculated or invented:
+the days already on those entries are collected, sorted, and handed
+back out earliest day to lowest number. The assertions: the same set of
+days comes back with none added or dropped, sorted by number the dates
+run forwards, the lowest number holds the earliest day, a fixed
+calendar date is left out of the shuffle, and `redate: false` retitles
+without touching a date. One more checks the thing a store-level test
+cannot: after a reload, the X screen itself lists them in the new order.

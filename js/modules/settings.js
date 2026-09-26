@@ -575,9 +575,25 @@ export function renderSettings(sub) {
         + 'Fix the hashtag and run this again if that is the wrong way round.'));
     }
     if (plan.gaps.length) {
+      /* Twenty-odd numbers listed one by one is a wall, not
+         information. Past a handful, say how many and where. */
+      const g = plan.gaps;
+      const asRanges = () => {
+        const out = []; let a = g[0], b = g[0];
+        for (let i = 1; i <= g.length; i++) {
+          if (g[i] === b + 1) { b = g[i]; continue; }
+          out.push(a === b ? `#${a}` : `#${a}–#${b}`);
+          a = b = g[i];
+        }
+        return out;
+      };
+      const r = asRanges();
       body.append(h('p', { class: 'small muted' },
-        `Missing from the hashtags: ${plan.gaps.map(n => '#' + n).join(', ')}. `
-        + 'Left as gaps — the numbers are yours, this only reads them.'));
+        g.length <= 8
+          ? `Missing from the hashtags: ${g.map(n => '#' + n).join(', ')}. `
+          : `${g.length} numbers below #${Math.max(...plan.rows.filter(x => x.via === 'hashtag').map(x => x.n))} `
+            + `have no entry (${r.slice(0, 4).join(', ')}${r.length > 4 ? ', …' : ''}). `,
+        'Left as gaps — the numbers are yours, this only reads them.'));
     }
     if (plan.blanks) {
       body.append(h('p', { class: 'small muted' },
@@ -609,33 +625,61 @@ export function renderSettings(sub) {
           + 'Two different numbers on that line is ambiguous, so it asks rather than guesses.'));
     }
 
-    if (!moved.length) {
+    if (plan.datesChanged) {
+      body.append(h('p', { class: 'small', style: { marginTop: '10px' } },
+        `The dates follow the numbers: ${plan.datesChanged} move. `
+        + 'No new dates are invented — the days already on these entries are put in order and handed '
+        + 'back out, earliest day to lowest number, so the run reads forwards again.'));
+    }
+
+    /* Every entry, not just the ones that move, and the line each was
+       read from. A list of only the changes cannot show you why
+       something did not change, which is the question you actually
+       have when this looks like it did nothing. */
+    body.append(h('p', { class: 'small muted', style: { marginTop: '12px' } },
+      'Every entry, and the last line each one was read from:'));
+    body.append(h('div', { class: 'list' }, plan.rows.map(r => {
+      const titleMoved = r.was !== r.to;
+      const dateMoved = r.to_when && r.from !== r.to_when;
+      return h('div', { class: 'item' },
+        h('div', { class: 'item-head' },
+          h('span', { class: 'item-title', text: titleMoved ? `${r.was} → ${r.to}` : r.was }),
+          h('span', { class: `tag ${r.via === 'hashtag' ? 'ok' : ''}`,
+            text: r.via === 'hashtag' ? 'from its hashtag' : 'no number' })),
+        h('div', { class: 'item-body mono', text: r.line || '(no last line)' }),
+        h('div', { class: 'item-meta' },
+          h('span', { text: dateMoved ? `${r.from} → ${r.to_when}` : (r.from || 'no date') }),
+          r.why ? h('span', { text: r.why }) : null,
+          !titleMoved && !dateMoved ? h('span', { text: 'unchanged' }) : null));
+    })));
+
+    if (!moved.length && !plan.datesChanged) {
       body.append(h('p', { class: 'small muted', style: { marginTop: '10px' },
         text: plan.byHash
-          ? 'Every title already matches its hashtag — nothing to change.'
+          ? 'Every title already matches its hashtag, and the dates are already in that order — nothing to change.'
           : 'Nothing to change: with no hashtags found, the order you already have is the order it would write.' }));
-    } else {
-      body.append(h('div', { class: 'list', style: { marginTop: '10px' } }, moved.map(r =>
-        h('div', { class: 'item' },
-          h('div', { class: 'item-head' },
-            h('span', { class: 'item-title', text: `${r.was} → ${r.to}` }),
-            r.via === 'tail'
-              ? h('span', { class: 'small muted', text: r.why })
-              : null)))));
     }
 
     modal({
       title: 'Renumber the X diary',
       body,
       wide: true,
-      actions: moved.length
+      actions: (moved.length || plan.datesChanged)
         ? [
             { label: 'Cancel' },
-            { label: `Retitle ${moved.length}`, cls: 'btn-primary', onClick: () => {
-              const r = DIARY.renumber('x', 'thread');
-              toast(r.applied ? `${r.applied} entries retitled and put back in order` : 'Nothing to change', 4000);
-              draw();
-            } },
+            { label: moved.length
+                ? `Retitle ${moved.length}${plan.datesChanged ? ' and re-date' : ''}`
+                : `Re-date ${plan.datesChanged}`,
+              cls: 'btn-primary',
+              onClick: () => {
+                const r = DIARY.renumber('x', 'thread');
+                const bits = [];
+                if (r.applied) bits.push(`${r.applied} retitled`);
+                if (r.redated) bits.push(`${r.redated} re-dated`);
+                if (r.cleared) bits.push(`${r.cleared} empty slots cleared`);
+                toast(bits.length ? bits.join(', ') + ' — the run is back in order' : 'Nothing to change', 4500);
+                draw();
+              } },
           ]
         : [{ label: 'Close' }],
     });

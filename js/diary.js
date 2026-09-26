@@ -407,9 +407,11 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
   const taken = new Map();                        // number → entry
   const tail = [];                                // in the order they already sit
   const dupes = [];
+  const lineOf = new Map();                       // id → the line it was read from
 
   live.forEach(it => {
     const tag = readTag(it.body);
+    lineOf.set(it.id, tag.line);
     if (tag.n == null) { tail.push({ it, why: tag.why, line: tag.line }); return; }
     if (taken.has(tag.n)) {
       dupes.push({ n: tag.n, was: it.title });
@@ -428,8 +430,38 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
 
   const rows = live.map(it => {
     const a = assigned.get(it.id);
-    return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why, line: a.line };
+    return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why,
+             line: lineOf.get(it.id) || '' };
   }).sort((x, y) => x.n - y.n);
+
+  /* The dates follow the numbers.
+
+     Renumbering on its own leaves entry 27 sitting on the date entry
+     1 used to have, so the run reads backwards and the scheduler —
+     which works the cadence out from this very run — learns nonsense
+     from it. The dates themselves are not recalculated or invented:
+     the ones already on these entries are collected, put in order,
+     and handed back out lowest date to lowest number. Same set of
+     days, matched to the new running order.
+
+     An entry with a fixed calendar date rather than a T-offset keeps
+     it, and is left out of the shuffle entirely. */
+  const byId = new Map(live.map(it => [it.id, it]));
+  const ordered = rows.map(r => byId.get(r.id)).filter(Boolean);
+  const pool = ordered
+    .map(it => offsetOf(it.when))
+    .filter(o => o != null)
+    .sort((a, b) => a - b);
+
+  let k = 0;
+  const dates = ordered.map(it => {
+    const cur = offsetOf(it.when);
+    if (cur == null) return { id: it.id, from: it.when || '', to: it.when || '', fixed: true };
+    return { id: it.id, from: it.when, to: asT(pool[k++]) };
+  });
+  const datesChanged = dates.filter(d => d.from !== d.to).length;
+  const dateById = new Map(dates.map(d => [d.id, d]));
+  rows.forEach(r => { const d = dateById.get(r.id); if (d) { r.from = d.from; r.to_when = d.to; } });
 
   const gaps = [];
   for (let n = 1; n <= hi; n++) if (!taken.has(n)) gaps.push(n);
@@ -453,6 +485,8 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
     dupes,
     gaps,
     blanks,
+    dates,
+    datesChanged,
     count: live.length,
     /* What the last line of the first few unnumbered entries actually
        says. When nothing is found, showing this beats saying "0
@@ -462,13 +496,20 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
 }
 
 /** Retitle from the hashtags and put the run back in order. */
-export function renumber(pKey = 'x', tKey = 'thread') {
+export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
   const plan = renumberPlan(pKey, tKey);
   if (!plan.ok) return plan;
 
   const list = itemsOf(pKey, tKey);
   const to = new Map(plan.rows.map(r => [r.id, r.to]));
-  list.forEach(it => { const t = to.get(it.id); if (t) it.title = t; });
+  const when = redate ? new Map(plan.dates.map(d => [d.id, d.to])) : new Map();
+  list.forEach(it => {
+    const t = to.get(it.id);
+    if (t) it.title = t;
+    /* dates move with the numbers, never onto a fixed calendar date */
+    const w = when.get(it.id);
+    if (w !== undefined && !it.fixedDate) it.when = w;
+  });
 
   const claimed = new Set(plan.rows.map(r => r.n));
   const keep = list.filter(it => !(
@@ -480,5 +521,5 @@ export function renumber(pKey = 'x', tKey = 'thread') {
   reorderDiaries(keep);
   S.touch(`p_${pKey}`);
 
-  return { ...plan, applied: plan.changed, cleared };
+  return { ...plan, applied: plan.changed, redated: redate ? plan.datesChanged : 0, cleared };
 }
