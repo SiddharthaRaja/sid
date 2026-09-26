@@ -29,6 +29,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/autocorrect.mjs
     node tools/tests/typing-latency.mjs
     node tools/tests/renumber.mjs
+    node tools/tests/order-by-date.mjs
 
 ## What each one holds the line on
 
@@ -276,3 +277,16 @@ because `offsetOf` required the sign. The app always writes it, but a
 hand-typed value would not, so `offsetOf` now accepts either. That is
 strictly more permissive — nothing that parsed before parses
 differently.
+
+**order-by-date.mjs** — the list is ordered by when the thing goes
+out. Change an entry's T-value and it moves to where that date puts
+it: no button, no save step, because the order is read from the dates
+rather than stored alongside them. An undated item stays at the top
+rather than vanishing to the bottom of a hundred rows, and a fixed
+calendar date sorts on the day it lands on, interleaved with the
+offsets instead of sitting in its own block. It applies to every
+content list, not just the diary.
+
+The assertion that matters most: the stored order is untouched. This
+is how the list is READ, not a rewrite of your data, so there is
+nothing to undo and nothing that can be lost if it is wrong.

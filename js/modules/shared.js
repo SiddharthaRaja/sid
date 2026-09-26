@@ -11,6 +11,7 @@ import {
   removeFrom
 } from '../ui.js';
 import { icon } from '../icons.js';
+import { offsetOf } from '../phases.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
 import { writingAids } from './compose.js';
 import { mediaFromUrl } from '../drive.js';
@@ -569,6 +570,23 @@ function preview(item) {
   return body.slice(0, nl).trim() === String(n) ? body.slice(nl + 1) : body;
 }
 
+/**
+ * Where an item sits in the running order.
+ *
+ * A T-offset sorts on the day it means. A fixed calendar date sorts
+ * on the same scale, worked out from the release date, so the two
+ * kinds interleave properly instead of sitting in separate blocks.
+ * Undated items come first, because something you just made and have
+ * not dated yet should not vanish to the bottom of a hundred rows.
+ */
+function orderKey(item, releaseISO) {
+  const n = offsetOf(item.when);
+  if (n != null) return n;
+  const iso = resolveDate(item.when, releaseISO);
+  if (iso && releaseISO) return daysBetween(releaseISO, iso);
+  return -1e6;                      // no date yet: keep it in sight
+}
+
 export function contentList({ slice, store, type, pathHint, platformKey, onChanged, openId }) {
   const wrap = h('div');
   store.content = store.content || {};
@@ -656,8 +674,17 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
 
     function paintList() {
       clear(listBox);
-      const shown = items.filter(i =>
-        (filter === 'all' || i.status === filter) && matches(i, query.trim()));
+      /* The list is ordered by when the thing goes out.
+         Change an entry's T-value and it moves to where that date
+         puts it — no button, no re-save, it is just where the list
+         reads it from. Anything with no date yet stays at the top,
+         where you can still see what you just made; a fixed calendar
+         date sorts on the day it lands on, same as an offset. */
+      const shown = items
+        .filter(i => (filter === 'all' || i.status === filter) && matches(i, query.trim()))
+        .map((i, at) => ({ i, at, key: orderKey(i, set.releaseDate) }))
+        .sort((a, b) => (a.key - b.key) || (a.at - b.at))
+        .map(x => x.i);
 
       if (!shown.length) {
         listBox.append(empty(
