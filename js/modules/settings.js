@@ -588,8 +588,32 @@ export function renderSettings(sub) {
         + 'Once the written run is numbered, clear the empty ones and lay them out again so they follow on from it.'));
     }
 
+    /* When it found few or no hashtags, show the line it actually
+       read. "0 carrying a hashtag" tells you the result and hides the
+       cause; the line it looked at tells you both at once. */
+    if (plan.samples && plan.samples.length && plan.byHash < plan.count) {
+      body.append(
+        h('p', { class: 'small', style: { marginTop: '10px' } },
+          plan.byHash
+            ? 'The ones without a number — this is the last line of each, which is where it looks:'
+            : 'No numbered hashtag found on any of them. This is the last line of the first few, which is where it looks:'),
+        h('div', { class: 'list' }, plan.samples.map(s =>
+          h('div', { class: 'item' },
+            h('div', { class: 'item-head' },
+              h('span', { class: 'item-title', text: s.title })),
+            h('div', { class: 'item-body mono', text: s.line }),
+            h('div', { class: 'item-meta' }, h('span', { text: s.why }))))),
+        h('p', { class: 'small muted' },
+          'It reads the last line with anything on it and takes the one #number on it — '
+          + '"#27 #shewont #newmusic" is fine, the number does not have to be last. '
+          + 'Two different numbers on that line is ambiguous, so it asks rather than guesses.'));
+    }
+
     if (!moved.length) {
-      body.append(h('p', { class: 'small muted', text: 'Every title already matches its hashtag — nothing to change.' }));
+      body.append(h('p', { class: 'small muted', style: { marginTop: '10px' },
+        text: plan.byHash
+          ? 'Every title already matches its hashtag — nothing to change.'
+          : 'Nothing to change: with no hashtags found, the order you already have is the order it would write.' }));
     } else {
       body.append(h('div', { class: 'list', style: { marginTop: '10px' } }, moved.map(r =>
         h('div', { class: 'item' },

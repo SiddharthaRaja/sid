@@ -28,6 +28,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/enter-to-done.mjs
     node tools/tests/autocorrect.mjs
     node tools/tests/typing-latency.mjs
+    node tools/tests/renumber.mjs
 
 ## What each one holds the line on
 
@@ -221,3 +222,26 @@ a `null` it appends the *string* "null" into the middle of the sheet. An
 optional row that is sometimes absent is exactly where that happens, so
 the file opens an editor on eight platforms and walks the text nodes
 looking for a bare "null" or "undefined".
+
+**renumber.mjs** — retitling the X diary from the hashtag at the foot of
+each entry. The reader originally wanted "#27" to be the very last
+characters of the body. Real entries do not end that way: they sign off
+with a row of tags, "#27 #shewont #newmusic", so every entry read as
+unnumbered, the plan changed nothing, and tapping the button appeared to
+do nothing at all.
+
+It now reads the last line with anything on it, and takes the one
+#number on it wherever it sits. The guards, each with a case here: that
+last line has to BE a row of tags, so "I played it at #9 in the set"
+does not renumber the entry to 9; a year is not an entry number, so
+"#44 #2026" is 44; two different entry numbers on one line is refused
+rather than guessed; "# 8" is the same tag as "#8". Plus the plan itself
+— every hashtag found, unnumbered entries appended after the highest,
+duplicates reported and sent to the tail, no body text edited, unique
+numbers, the run left in order, a second run doing nothing, and the
+titles surviving a reload.
+
+The last group is about the screen rather than the rule: when nothing is
+found it has to say so and show the line it actually looked at. "0
+carrying a hashtag" reports the result and hides the cause, which is how
+this shipped looking like it was broken.

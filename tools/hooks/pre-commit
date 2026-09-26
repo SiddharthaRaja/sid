@@ -1,0 +1,41 @@
+#!/bin/sh
+# Refuse a commit that changes an app file without bumping sw.js.
+#
+# The service worker names its cache after VERSION and the app compares
+# the running VERSION against the server's to decide whether to offer
+# you a reload. Ship a change with the version unchanged and the app
+# has no way to tell you anything happened — you push, and nothing
+# appears to change. That has now happened once; this stops it.
+#
+# Install:  git config core.hooksPath tools/hooks
+# Skip once (rare):  git commit --no-verify
+
+staged=$(git diff --cached --name-only)
+
+# files the service worker precaches — a change to any of them is a
+# change to what the browser is holding
+app=$(printf '%s\n' "$staged" | grep -E '^(index\.html|manifest\.webmanifest|css/.*\.css|js/.*\.js)$' | grep -v '^js/firebase-config\.js$')
+
+[ -z "$app" ] && exit 0
+
+case "$staged" in
+  *sw.js*) ;;
+  *)
+    echo "pre-commit: app files changed but sw.js was not touched:"
+    printf '  %s\n' $app
+    echo
+    echo "Bump VERSION in sw.js (currently $(grep -o \"sid-v[0-9]*\" sw.js | head -1)) so the app knows to reload,"
+    echo "then stage it. To override just this once: git commit --no-verify"
+    exit 1
+    ;;
+esac
+
+# sw.js is staged — make sure VERSION actually moved
+old=$(git show HEAD:sw.js 2>/dev/null | grep -o "sid-v[0-9]*" | head -1)
+new=$(git show :sw.js      2>/dev/null | grep -o "sid-v[0-9]*" | head -1)
+if [ -n "$old" ] && [ "$old" = "$new" ]; then
+  echo "pre-commit: sw.js is staged but VERSION is still $old."
+  echo "App files changed, so bump it — otherwise the app cannot tell it has a new build."
+  exit 1
+fi
+exit 0

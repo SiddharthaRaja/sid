@@ -311,10 +311,62 @@ export function undo() {
 
 /** "#27" on the last line of a body → 27. Anything else → null. */
 export function hashNo(body) {
-  const m = String(body || '').trimEnd().match(/#\s*(\d{1,3})\s*$/);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
-  return n >= 1 && n <= 999 ? n : null;
+  return readTag(body).n;
+}
+
+/**
+ * Read the numbering hashtag off the foot of an entry.
+ *
+ * The first version of this wanted "#27" to be the very last thing in
+ * the body. Real entries do not end that way — a post signs off with
+ * a row of tags, "#27 #shewont #newmusic", and the number is first in
+ * the row rather than last. Every one of those read as unnumbered, so
+ * renumbering found nothing and appeared to do nothing at all.
+ *
+ * So: look at the last line with anything on it, and take the one
+ * numeric hashtag on it, wherever it sits among the others. A "#3"
+ * buried mid-paragraph is still ignored, which is the point of
+ * looking at the last line and not the whole body.
+ *
+ * Returns the reason when there is no number, so the screen can say
+ * what it read instead of silently doing nothing.
+ */
+export function readTag(body) {
+  const text = String(body || '').replace(/\s+$/, '');
+  if (!text) return { n: null, why: 'empty', line: '' };
+
+  const lines = text.split('\n');
+  let line = '';
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim()) { line = lines[i].trim(); break; }
+  }
+  if (!line) return { n: null, why: 'empty', line: '' };
+
+  /* "# 8" is the same tag as "#8" to a person, so close the gap
+     before anything else looks at the line. */
+  const norm = line.replace(/#\s+(?=[\p{L}\p{N}])/gu, '#');
+
+  /* The last line has to BE a row of tags, not a sentence that
+     happens to end with one. Strip the hashtags and the separators
+     between them; if there is prose left over, this is writing, and
+     "I played it at #9 in the set" must not renumber the entry to 9. */
+  const residue = norm
+    .replace(/#[\p{L}\p{N}_]+/gu, '')
+    .replace(/[\s,.·|/\\\-–—]+/gu, '');
+  if (residue) return { n: null, why: 'the last line is writing, not a row of tags', line };
+
+  const nums = [...norm.matchAll(/#(\d{1,3})\b/g)]
+    .map(m => parseInt(m[1], 10))
+    .filter(n => n >= 1 && n <= DIARY_TARGET * 10);   // #2026 is a year, not an entry
+
+  if (!nums.length) return { n: null, why: 'no numbered hashtag on the last line', line };
+  /* Two different entry numbers on one line is a guess, and guessing
+     here retitles the wrong entry. Say so instead. */
+  if (new Set(nums).size > 1) {
+    return { n: null, why: `more than one number on the last line (${[...new Set(nums)].map(x => '#' + x).join(', ')})`, line };
+  }
+  const n = nums[0];
+  return n >= 1 && n <= 999 ? { n, why: '', line } : { n: null, why: 'out of range', line };
 }
 
 /** Diary entries in number order, non-diary items left where they sit. */
@@ -357,10 +409,14 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
   const dupes = [];
 
   live.forEach(it => {
-    const n = hashNo(it.body);
-    if (n == null) { tail.push({ it, why: 'no hashtag at the bottom' }); return; }
-    if (taken.has(n)) { dupes.push({ n, was: it.title }); tail.push({ it, why: `#${n} was already claimed` }); return; }
-    taken.set(n, it);
+    const tag = readTag(it.body);
+    if (tag.n == null) { tail.push({ it, why: tag.why, line: tag.line }); return; }
+    if (taken.has(tag.n)) {
+      dupes.push({ n: tag.n, was: it.title });
+      tail.push({ it, why: `#${tag.n} was already claimed`, line: tag.line });
+      return;
+    }
+    taken.set(tag.n, it);
   });
 
   const hi = taken.size ? Math.max(...taken.keys()) : 0;
@@ -368,11 +424,11 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
 
   const assigned = new Map();
   taken.forEach((it, n) => assigned.set(it.id, { n, via: 'hashtag' }));
-  tail.forEach(({ it, why }) => assigned.set(it.id, { n: next++, via: 'tail', why }));
+  tail.forEach(({ it, why, line }) => assigned.set(it.id, { n: next++, via: 'tail', why, line }));
 
   const rows = live.map(it => {
     const a = assigned.get(it.id);
-    return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why };
+    return { id: it.id, was: it.title, to: `Diary ${a.n}`, n: a.n, via: a.via, why: a.why, line: a.line };
   }).sort((x, y) => x.n - y.n);
 
   const gaps = [];
@@ -398,6 +454,10 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
     gaps,
     blanks,
     count: live.length,
+    /* What the last line of the first few unnumbered entries actually
+       says. When nothing is found, showing this beats saying "0
+       carrying a hashtag" and leaving you to guess why. */
+    samples: tail.slice(0, 4).map(t => ({ title: t.it.title, line: t.line || '(nothing)', why: t.why })),
   };
 }
 
