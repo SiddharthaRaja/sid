@@ -185,6 +185,83 @@ async function fillDiarySlots() {
   return { ...r, endWhen: plan.endWhen };
 }
 
+/**
+ * Clear every title on the text platforms, once.
+ *
+ * A post on X, Threads or Bluesky has no name — it is just the text —
+ * so the title box was taken off those sheets. That left the titles
+ * already on older entries stranded: still there, still showing, and
+ * no longer editable. Half-cleared is worse than either state, so the
+ * rest go too.
+ *
+ * Only the title. The text, the dates, the status, the tags, the
+ * notes and the attachments are not read, let alone written. A
+ * snapshot goes down first, so Settings → Backup → Snapshots puts
+ * them all back if this was the wrong call.
+ */
+async function clearTextTitlesOnce() {
+  const set = S.get('settings');
+  if (set.textTitlesCleared) return null;
+
+  const keys = PLATFORMS.filter(p => p.group === 'Text').map(p => p.key);
+  const count = () => keys.reduce((n, k) => {
+    const c = S.get(`p_${k}`).content || {};
+    return n + Object.values(c).reduce((m, arr) =>
+      m + (arr || []).filter(it => it && String(it.title || '').trim()).length, 0);
+  }, 0);
+
+  const had = count();
+  if (!had) { set.textTitlesCleared = true; S.touch('settings'); return null; }
+
+  const before = S.everything();
+  try { await L.writeSnapshot(before, 'pre-clear-text-titles'); }
+  catch (e) { console.warn('title clear deferred — no snapshot', e); return null; }
+  try { const J = await import('./journal.js'); await J.recordAll(before, 'pre-clear-text-titles'); } catch {}
+
+  keys.forEach(k => {
+    const sl = S.get(`p_${k}`);
+    let touched = false;
+    Object.values(sl.content || {}).forEach(arr => {
+      (arr || []).forEach(it => {
+        if (it && String(it.title || '') !== '') { it.title = ''; touched = true; }
+      });
+    });
+    if (touched) S.touch(`p_${k}`);
+  });
+
+  set.textTitlesCleared = true;
+  S.touch('settings');
+  return { cleared: had };
+}
+
+/**
+ * Lay the diary run back out from T-30, one day each, once.
+ *
+ * Hand-editing dates leaves duplicates and gaps, and the run stops
+ * meaning a day each. This walks each text platform's diary in the
+ * order it already reads and hands the days back out in sequence.
+ * From then on, re-dating one entry pushes the rest along instead of
+ * doubling up, so it should not need doing again.
+ */
+async function resequenceDiaryOnce() {
+  const set = S.get('settings');
+  if (set.diaryResequenced) return null;
+
+  const before = S.everything();
+  try { await L.writeSnapshot(before, 'pre-resequence'); }
+  catch (e) { console.warn('resequence deferred — no snapshot', e); return null; }
+  try { const J = await import('./journal.js'); await J.recordAll(before, 'pre-resequence'); } catch {}
+
+  let moved = 0;
+  DIARY.DIARY_TRACKS.forEach(([pKey, tKey]) => {
+    moved += DIARY.resequence(pKey, tKey, -30).moved;
+  });
+
+  set.diaryResequenced = true;
+  S.touch('settings');
+  return { moved };
+}
+
 /* Fill the reference-heavy modules on first run. */
 function seedDefaults() {
   const clone = (arr) => arr.map(x => ({ ...x }));
@@ -652,6 +729,8 @@ async function start() {
     await removeInventedSeeds();
     seedDefaults();
     const diary = await fillDiarySlots();
+    const titlesGone = await clearTextTitlesOnce();
+    const reseq = await resequenceDiaryOnce();
 
     /* anything shared into Sid from another app while it was closed */
     try {
@@ -698,6 +777,16 @@ async function start() {
     // a snapshot every time you open the app
     S.snapshotNow('session-open').catch(e => console.warn('session snapshot', e));
     paintHealth();
+
+    if (titlesGone && titlesGone.cleared) {
+      toast(`${titlesGone.cleared} titles removed on X, Threads and Bluesky — the text is untouched. `
+        + `Settings → Backup → Snapshots can put them back.`, 9000);
+    }
+
+    if (reseq && reseq.moved) {
+      toast(`${reseq.moved} entries re-dated — one a day from T-30, no duplicates. `
+        + `Settings → Backup → Snapshots can undo it.`, 9000);
+    }
 
     if (diary && diary.added) {
       toast(`${diary.added} diary slots added — numbered to ${DIARY.DIARY_TARGET}, ending ${diary.endWhen}. `

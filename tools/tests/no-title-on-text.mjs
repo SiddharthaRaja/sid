@@ -38,7 +38,7 @@ async function boot() {
     }
     localStorage.setItem('sid.v2.local.slice.settings',
       rec({ artist: 'Si', song: "She Won't", releaseDate: '2026-12-01', mode: 'execution',
-            themeMode: 'dark', accent: 'ember', seedsRemoved: true, diaryFilled: true }));
+            themeMode: 'dark', accent: 'ember', seedsRemoved: true, textTitlesCleared: true, diaryResequenced: true, diaryFilled: true }));
   });
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.Sid && !document.querySelector('#app').hidden, null, { timeout: 25000 });

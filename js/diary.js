@@ -34,7 +34,23 @@ export const DIARY_TRACKS = [
 ];
 
 /** "Diary 7" → 7. Tolerates "Diary  7", "diary 7 — something". */
-export function diaryNo(title) {
+export function diaryNo(titleOrItem) {
+  /* Takes an entry, or just a title.
+     The titles are gone from the text platforms — a post there has no
+     name — so the number now comes off the first line of the entry
+     instead, which is where it has always also been written. Passing
+     a bare title still works, for the places that only have one. */
+  if (titleOrItem && typeof titleOrItem === 'object') {
+    /* The first line wins. It is the one you maintain and the one
+       renumbering writes; a leftover title can disagree with it and
+       would then be answering with a number that is no longer true. */
+    const fromBody = bodyNo(titleOrItem.body);
+    return fromBody != null ? fromBody : titleNo(titleOrItem.title);
+  }
+  return titleNo(titleOrItem);
+}
+
+function titleNo(title) {
   const m = String(title || '').trim().match(/^diary\s*(\d{1,3})\b/i);
   if (!m) return null;
   const n = parseInt(m[1], 10);
@@ -52,7 +68,7 @@ const itemsOf = (pKey, tKey) => {
 export function existing(pKey, tKey) {
   const map = new Map();
   itemsOf(pKey, tKey).forEach(it => {
-    const n = diaryNo(it.title);
+    const n = diaryNo(it);
     if (n != null && !map.has(n)) map.set(n, it);
   });
   return map;
@@ -178,7 +194,7 @@ export function fill() {
     /* Keep the run in order. Entries that are not part of the diary,
        or that have a fixed calendar date, are left where they are. */
     list.sort((a, b) => {
-      const na = diaryNo(a.title), nb = diaryNo(b.title);
+      const na = diaryNo(a), nb = diaryNo(b);
       if (na == null || nb == null) return 0;
       return na - nb;
     });
@@ -203,7 +219,7 @@ export function fill() {
 /** Has this slot actually been written in, or is it still the bare number? */
 export function written(it) {
   if (!it) return false;
-  const n = diaryNo(it.title);
+  const n = diaryNo(it);
   const body = String(it.body || '').trim();
   /* A blank slot's body is just its own number. Anything more — even
      one word — counts as started. */
@@ -272,7 +288,7 @@ export function undo() {
     const list = itemsOf(pKey, tKey);
     const keep = list.filter(it => {
       if (!it.gen) return true;
-      const n = diaryNo(it.title);
+      const n = diaryNo(it);
       const untouched = String(it.body || '').trim() === String(n)
         && !(it.notes || '').trim() && !(it.media || []).length
         && it.status === 'draft';
@@ -397,9 +413,9 @@ function reorderDiaries(list) {
   const slots = [];
   const picked = [];
   list.forEach((it, i) => {
-    if (diaryNo(it.title) != null) { slots.push(i); picked.push(it); }
+    if (diaryNo(it) != null) { slots.push(i); picked.push(it); }
   });
-  picked.sort((a, b) => diaryNo(a.title) - diaryNo(b.title));
+  picked.sort((a, b) => diaryNo(a) - diaryNo(b));
   slots.forEach((i, k) => { list[i] = picked[k]; });
 }
 
@@ -414,7 +430,7 @@ function reorderDiaries(list) {
  */
 export function renumberPlan(pKey = 'x', tKey = 'thread') {
   const list = itemsOf(pKey, tKey);
-  const diaries = list.filter(it => diaryNo(it.title) != null);
+  const diaries = list.filter(it => diaryNo(it) != null);
   if (!diaries.length) {
     return { ok: false, reason: 'No entries titled "Diary …" here, so there is nothing to renumber.' };
   }
@@ -495,7 +511,7 @@ export function renumberPlan(pKey = 'x', tKey = 'thread') {
      scaffolding this app made, so it goes rather than the writing. */
   const claimed = new Set(rows.map(r => r.n));
   const collides = diaries.filter(it =>
-    !written(it) && it.gen && claimed.has(diaryNo(it.title))).length;
+    !written(it) && it.gen && claimed.has(diaryNo(it))).length;
 
   return {
     ok: true,
@@ -532,9 +548,9 @@ export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
   list.forEach(it => {
     const t = to.get(it.id);
     if (t) {
-      it.title = t;
-      /* and the number on the first line, which is the one you
-         actually read when the entry is open */
+      /* The number lives on the first line now, not in a title. The
+         text platforms have no title box, so putting one back here
+         would recreate exactly what was just cleared. */
       it.body = renumberBody(it.body, num.get(it.id));
     }
     /* dates move with the numbers, never onto a fixed calendar date */
@@ -545,7 +561,7 @@ export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
   const claimed = new Set(plan.rows.map(r => r.n));
   const keep = list.filter(it => !(
     !to.has(it.id) && it.gen && !written(it)
-    && diaryNo(it.title) != null && claimed.has(diaryNo(it.title))));
+    && diaryNo(it) != null && claimed.has(diaryNo(it))));
   const cleared = list.length - keep.length;
 
   S.get(`p_${pKey}`).content[tKey] = keep;
@@ -554,4 +570,65 @@ export function renumber(pKey = 'x', tKey = 'thread', { redate = true } = {}) {
 
   return { ...plan, applied: plan.changed, redated: redate ? plan.datesChanged : 0,
            bodies: plan.bodiesChanged, cleared };
+}
+
+/* ============================================================
+   Dates: one entry, one day
+   ============================================================ */
+
+/**
+ * Lay the run back out from T-30, one day each, in the order it
+ * already sits.
+ *
+ * Editing dates by hand leaves duplicates — two entries on T+6, a
+ * gap at T+7 — and the run stops meaning "a day each". This walks
+ * the list in the order it currently reads and hands out T-30,
+ * T-29, T-28 and so on.
+ *
+ * Only entries that already carry a T-offset take part. One pinned
+ * to a real calendar date keeps it, and one with no date stays
+ * undated: those are choices, not accidents.
+ */
+export function resequence(pKey, tKey, from = -30) {
+  const list = itemsOf(pKey, tKey);
+  const dated = list
+    .map((it, at) => ({ it, at, off: offsetOf(it.when) }))
+    .filter(x => x.off != null)
+    .sort((a, b) => (a.off - b.off) || (a.at - b.at));
+
+  let n = 0;
+  dated.forEach((x, i) => {
+    const want = asT(from + i);
+    if (x.it.when !== want) { x.it.when = want; n++; }
+  });
+  if (n) S.touch(`p_${pKey}`);
+  return { moved: n, total: dated.length };
+}
+
+/**
+ * Make room at a day, by pushing everything from it onwards along.
+ *
+ * Move an entry to T+9 and the one already on T+9 becomes T+10, the
+ * old T+10 becomes T+11, and so on — the entry you moved takes the
+ * day you gave it and nothing ends up sharing. If the day was free,
+ * nothing moves: there is nothing to make room for.
+ *
+ * `moved` is the entry you just re-dated; it is never pushed by its
+ * own arrival.
+ */
+export function makeRoom(list, moved, when, sliceId) {
+  const off = offsetOf(when);
+  if (off == null || !Array.isArray(list)) return 0;
+
+  const occupied = list.some(it => it !== moved && offsetOf(it.when) === off);
+  if (!occupied) return 0;
+
+  let n = 0;
+  list.forEach(it => {
+    if (it === moved) return;
+    const o = offsetOf(it.when);
+    if (o != null && o >= off) { it.when = asT(o + 1); n++; }
+  });
+  if (n && sliceId) S.touch(sliceId);
+  return n;
 }

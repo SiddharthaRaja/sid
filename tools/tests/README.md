@@ -31,6 +31,8 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/renumber.mjs
     node tools/tests/order-by-date.mjs
     node tools/tests/no-title-on-text.mjs
+    node tools/tests/clear-text-titles.mjs
+    node tools/tests/one-day-each.mjs
 
 ## What each one holds the line on
 
@@ -305,3 +307,46 @@ character-for-character what it was — not blanked, not rewritten — and
 that diaryNo() still reads 1, 2, 3 off them afterwards. A new post
 saves with an empty title, as it always did, and the list row falls
 back to showing its text.
+
+**clear-text-titles.mjs** — every title on X, Threads and Bluesky is
+cleared, once, on launch. Taking the box away left the titles already
+on older entries stranded: still showing, no longer editable, and
+half-cleared is worse than either state.
+
+Only the title. Most of this file checks the rest: the text is
+character for character what it was, and so are the dates, statuses,
+tags, notes and attachments; nothing is added or removed; a snapshot
+goes down first and it does not run twice; Instagram keeps its titles.
+
+Two things followed from it. With no title, a row would have shown the
+same words as its own heading and its preview, so an untitled row is
+now headed by its first line and previews from the second. And the
+diary number could no longer be read from a title, so `diaryNo()`
+reads the first line of the entry instead — which is where it has
+always also been written — and falls back to a title only when there
+is no number there. The first line wins over a leftover title, because
+a stale title would answer with a number that is no longer true. For
+the same reason renumbering stops writing titles: putting one back
+would recreate exactly what was cleared.
+
+**one-day-each.mjs** — the diary is one entry a day, and hand-editing
+dates had left duplicates: two entries on T+6, a gap at T+7.
+
+Two parts. A one-off pass on launch walks each text platform's diary
+in the order it already reads and hands the days back out from T-30,
+one each. Only entries already carrying a T-offset take part: one
+pinned to a real calendar date keeps it and an undated one stays
+undated, because those are choices rather than accidents. A snapshot
+goes down first and it does not run twice.
+
+Then it stays that way. Re-date an entry to T+9 and whatever was on
+T+9 becomes T+10, the old T+10 becomes T+11, and so on — the entry
+you moved takes the day you gave it and nothing ends up sharing.
+Moving into a free day pushes nothing, because there is no room to
+make. One test drives that through the editor itself rather than the
+function, since the push is worth nothing if it is not wired to the
+box you actually type in.
+
+As everywhere here, the assertions that matter are the ones about
+what did NOT change: every body character for character, the
+statuses, and the count.

@@ -16,7 +16,7 @@ import { PLATFORMS } from '../data/platforms.js';
 import { TEMPLATES, fillTemplate, missingPlaceholders, splitHint } from '../data/templates.js';
 import { writingAids } from './compose.js';
 import { mediaFromUrl } from '../drive.js';
-import { due as diaryDue, diaryNo, DIARY_TRACKS, written as diaryWritten } from '../diary.js';
+import { due as diaryDue, diaryNo, DIARY_TRACKS, written as diaryWritten, makeRoom } from '../diary.js';
 
 export const STATUSES = [
   ['idea', 'Idea'], ['draft', 'Draft'], ['ready', 'Ready'],
@@ -318,7 +318,7 @@ export function scheduleRow(item, slice, onChange, opts = {}) {
    you are rewriting a thought rather than trying to recall it. Read
    only, folded shut, and no copy button anywhere near it. */
 function siblingDiary(item, pkey, tkey) {
-  const n = diaryNo(item.title);
+  const n = diaryNo(item);
   if (n == null) return null;
   if (!DIARY_TRACKS.some(([p, t]) => p === pkey && t === tkey)) return null;
 
@@ -326,7 +326,7 @@ function siblingDiary(item, pkey, tkey) {
     .filter(([p]) => p !== pkey)
     .map(([p, t, label]) => {
       const arr = (S.get(`p_${p}`).content || {})[t] || [];
-      const sib = arr.find(x => diaryNo(x.title) === n);
+      const sib = arr.find(x => diaryNo(x) === n);
       return { label, text: diaryWritten(sib) ? preview(sib).trim() : '' };
     })
     .filter(o => o.text);
@@ -444,7 +444,14 @@ export function itemEditor({ item, slice, type, pathHint, platformKey, onSave, o
     h('div', { class: 'grid g2' },
       selectField('Status', item, 'status', STATUSES, { slice }),
       field('Tags', item, 'tags', { slice, placeholder: 'hook, bts, lyric' })),
-    scheduleRow(item, slice),
+    /* Re-dating an entry pushes the rest along rather than doubling
+       up on a day: move one to T+9 and the entry already there
+       becomes T+10, the next T+11, and so on. A free day pushes
+       nothing. */
+    scheduleRow(item, slice, (v) => {
+      const arr = (S.get(slice).content || {})[type.key];
+      if (Array.isArray(arr)) makeRoom(arr, item, v, slice);
+    }),
     type.media !== false ? h('label', { class: 'field' },
       h('span', { class: 'lab', text: 'Attachments' }), mediaBlock(item, slice, pathHint)) : null,
     field('Notes', item, 'notes', { slice, multiline: true, placeholder: 'Anything you need to remember about this one' }),
@@ -576,11 +583,26 @@ function matches(item, q) {
    shows the writing instead. The body itself is never touched. */
 function preview(item) {
   const body = String(item.body || '');
-  const n = diaryNo(item.title);
-  if (n == null) return body;
+  const n = diaryNo(item);
+  if (n == null) {
+    /* No title: the row's heading is the first line of the text (see
+       headline below), so the preview starts from the second. Without
+       this the same words appear twice in every row. */
+    const nl = body.indexOf('\n');
+    return nl === -1 ? '' : body.slice(nl + 1);
+  }
   const nl = body.indexOf('\n');
   if (nl === -1) return body.trim() === String(n) ? '' : body;
   return body.slice(0, nl).trim() === String(n) ? body.slice(nl + 1) : body;
+}
+
+/** What the row is called. A titled item uses its title; an untitled
+    one is named by its own first line, which is what you would call
+    it anyway. */
+function headline(item) {
+  if (String(item.title || '').trim()) return item.title;
+  const first = String(item.body || '').split('\n')[0].trim();
+  return first.slice(0, 80) || 'Untitled';
 }
 
 /**
@@ -713,7 +735,7 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
         const iso = resolveDate(item.when, set.releaseDate);
         list.append(h('div', { class: 'item', onClick: () => open(item) },
           h('div', { class: 'item-head' },
-            h('span', { class: 'item-title', text: item.title || (item.body || '').slice(0, 60) || 'Untitled' }),
+            h('span', { class: 'item-title', text: headline(item) }),
             h('span', { class: `tag ${STATUS_TAG[item.status] || ''}`, text: (STATUSES.find(s => s[0] === item.status) || ['', 'Draft'])[1] })),
           preview(item) ? h('div', { class: 'item-body', text: preview(item) }) : null,
           h('div', { class: 'item-meta' },

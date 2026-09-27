@@ -19,29 +19,35 @@ const browser = await chromium.launch({
 /* Shuffled titles, hashtags in every shape a person actually writes. */
 function entries() {
   let off = -30;
-  const mk = (id, title, body) => ({ id, title, body, status: 'draft',
-    when: `T${off++}`, tags: '', notes: '', media: [] });
+  /* Written the way his are: the number on line one, the writing,
+     then the tags. That first line is where the number lives now
+     that the text platforms have no title box. */
+  let n = 0;
+  const mk = (id, body) => { n++; return {
+    id, title: '', body: `${n}\n${body}`, status: 'draft',
+    when: (off < 0 ? `T${off++}` : `T+${off++}`), tags: '', notes: '', media: [] };
+  };
   return [
     /* the shape that broke it: number first in a row of tags */
-    mk('a', 'Diary 1', 'first thing I wrote\n\n#27 #shewont #newmusic'),
+    mk('a', 'first thing I wrote\n\n#27 #shewont #newmusic'),
     /* number alone on the last line */
-    mk('b', 'Diary 2', 'second\n#3'),
+    mk('b', 'second\n#3'),
     /* number last in a row of tags */
-    mk('c', 'Diary 3', 'third\n#indie #12'),
+    mk('c', 'third\n#indie #12'),
     /* trailing blank lines */
-    mk('d', 'Diary 4', 'fourth\n#5\n\n\n'),
+    mk('d', 'fourth\n#5\n\n\n'),
     /* a hash mid-paragraph must NOT count, and there is no tag line */
-    mk('e', 'Diary 5', 'I played it at #9 in the set and nobody blinked'),
+    mk('e', 'I played it at #9 in the set and nobody blinked'),
     /* no tag at all */
-    mk('f', 'Diary 6', 'sixth, never numbered'),
+    mk('f', 'sixth, never numbered'),
     /* duplicate of #3 */
-    mk('g', 'Diary 7', 'seventh\n#3 #again'),
+    mk('g', 'seventh\n#3 #again'),
     /* two different entry numbers — ambiguous, must not guess */
-    mk('h', 'Diary 8', 'eighth\n#4 #9'),
+    mk('h', 'eighth\n#4 #9'),
     /* a number and a year is not ambiguous: the year is not an entry */
-    mk('j', 'Diary 10', 'tenth\n#44 #2026'),
+    mk('j', 'tenth\n#44 #2026'),
     /* space after the hash */
-    mk('i', 'Diary 9', 'ninth\n# 8'),
+    mk('i', 'ninth\n# 8'),
   ];
 }
 
@@ -58,7 +64,7 @@ async function boot(items) {
       rec({ content: { thread: its }, setupDone: {}, notes: '', stats: [], handle: '', profileUrl: '' }));
     localStorage.setItem('sid.v2.local.slice.settings',
       rec({ artist: 'Si', song: "She Won't", releaseDate: '2026-12-01', mode: 'execution',
-            themeMode: 'dark', accent: 'ember', seedsRemoved: true, diaryFilled: true }));
+            themeMode: 'dark', accent: 'ember', seedsRemoved: true, textTitlesCleared: true, diaryResequenced: true, diaryFilled: true }));
   }, items);
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.Sid && !document.querySelector('#app').hidden, null, { timeout: 25000 });
@@ -114,7 +120,7 @@ async function boot(items) {
     const plan = D.renumberPlan('x', 'thread');
     return {
       ok: plan.ok, count: plan.count, byHash: plan.byHash, tail: plan.tail,
-      rows: plan.rows.map(r => [r.was, r.to, r.via]),
+      rows: plan.rows.map(r => [r.line, r.to, r.via]),
       dupes: plan.dupes.map(d => d.n),
       tailFrom: plan.tailFrom, tailTo: plan.tailTo,
       samples: plan.samples.map(s => s.line),
@@ -128,13 +134,14 @@ async function boot(items) {
   ok('2d the duplicate is reported', JSON.stringify(p.dupes) === '[3]', JSON.stringify(p.dupes));
 
   const map = Object.fromEntries(p.rows.map(([was, to]) => [was, to]));
-  ok('2e each entry lands on its own hashtag',
-    map['Diary 1'] === 'Diary 27' && map['Diary 2'] === 'Diary 3'
-    && map['Diary 3'] === 'Diary 12' && map['Diary 4'] === 'Diary 5'
-    && map['Diary 9'] === 'Diary 8',
+  /* keyed on the tag line each one carries, since there are no
+     titles any more */
+  ok('2e each entry lands on the number its own hashtag names',
+    map['#27 #shewont #newmusic'] === 'Diary 27' && map['#3'] === 'Diary 3'
+    && map['#indie #12'] === 'Diary 12' && map['# 8'] === 'Diary 8',
     JSON.stringify(map));
   ok('2f the ambiguous one is not guessed into a number it named',
-    map['Diary 8'] !== 'Diary 4' && map['Diary 8'] !== 'Diary 9', map['Diary 8']);
+    map['#4 #9'] !== 'Diary 4' && map['#4 #9'] !== 'Diary 9', String(map['#4 #9']));
   ok('2g the plan can show the line it read',
     p.samples.length > 0 && p.samples.some(l => /#/.test(l)), JSON.stringify(p.samples));
   await ctx.close();
@@ -152,9 +159,12 @@ async function boot(items) {
     const list = S.get('p_x').content.thread;
     return {
       applied: r.applied,
-      titles: list.map(i => i.title),
-      order: list.map(i => D.diaryNo(i.title)),
-      bodiesUntouched: JSON.stringify(list.map(i => i.body).sort()) === JSON.stringify(before.sort()),
+      titles: list.map(i => i.body.split('\n')[0]),
+      order: list.map(i => D.diaryNo(i)),
+      /* line one is the number and is meant to change; everything
+         under it is the writing and must not */
+      bodiesUntouched: JSON.stringify(list.map(i => i.body.split('\n').slice(1).join('\n')).sort())
+        === JSON.stringify(before.map(b => b.split('\n').slice(1).join('\n')).sort()),
     };
   });
   ok('3 it retitles', after.applied > 0, 'applied=' + after.applied);
@@ -163,7 +173,8 @@ async function boot(items) {
   ok('3c and the run is left in number order',
     JSON.stringify(after.order) === JSON.stringify([...after.order].sort((a, b) => a - b)),
     JSON.stringify(after.order));
-  ok('3d not one character of the writing is edited', after.bodiesUntouched, String(after.bodiesUntouched));
+  ok('3d not one character of the writing below the number is edited',
+    after.bodiesUntouched, String(after.bodiesUntouched));
   ok('3e no errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
   /* running it again must be a no-op */
@@ -189,10 +200,10 @@ async function boot(items) {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.Sid && !document.querySelector('#app').hidden, null, { timeout: 25000 });
   await page.waitForTimeout(1000);
-  const titles = await page.evaluate(() =>
-    window.Sid.S.get('p_x').content.thread.map(i => i.title));
-  ok('4 the new titles survive a reload', titles.includes('Diary 27') && titles.includes('Diary 12'),
-    JSON.stringify(titles));
+  const firsts = await page.evaluate(() =>
+    window.Sid.S.get('p_x').content.thread.map(i => i.body.split('\n')[0]));
+  ok('4 the new numbering survives a reload', firsts.includes('27') && firsts.includes('12'),
+    JSON.stringify(firsts));
   await ctx.close();
 }
 
@@ -230,7 +241,7 @@ async function boot(items) {
     const before = S.get('p_x').content.thread.map(i => ({ t: i.title, w: i.when }));
     D.renumber('x', 'thread');
     await new Promise(z => setTimeout(z, 700));
-    const after = S.get('p_x').content.thread.map(i => ({ t: i.title, w: i.when, n: D.diaryNo(i.title) }));
+    const after = S.get('p_x').content.thread.map(i => ({ t: i.body.split('\n')[0], w: i.when, n: D.diaryNo(i) }));
     const off = (w) => { const m = String(w).match(/^T([+-]?\d+)?$/); return m ? (m[1] ? +m[1] : 0) : null; };
     return {
       beforeDates: before.map(x => x.w).sort((a, b) => off(a) - off(b)),
@@ -268,10 +279,10 @@ async function boot(items) {
     const list = S.get('p_x').content.thread;
     return {
       same: list.every(i => before.get(i.id) === i.when),
-      retitled: list.some(i => i.title === 'Diary 27'),
+      retitled: list.some(i => i.body.split('\n')[0] === '27'),
     };
   });
-  ok('7 with re-dating off the titles still change', r.retitled, String(r.retitled));
+  ok('7 with re-dating off the numbering still changes', r.retitled, String(r.retitled));
   ok('7b and not one date moves', r.same, String(r.same));
   await ctx.close();
 }
@@ -293,12 +304,12 @@ async function boot(items) {
     await new Promise(r => setTimeout(r, 1400));
     return [...document.querySelectorAll('#view .item-title')].map(t => t.textContent);
   });
-  const nums = shown.map(t => { const m = t.match(/Diary (\d+)/); return m ? +m[1] : null; }).filter(n => n != null);
+  const nums = shown.map(t => { const m = String(t).match(/^(\d{1,3})$/); return m ? +m[1] : null; })
+    .filter(n => n != null);
   ok('8 the X screen lists them in the new number order',
     nums.length > 0 && JSON.stringify(nums) === JSON.stringify([...nums].sort((a, b) => a - b)),
     JSON.stringify(shown));
-  ok('8b and the renumbered title is on screen',
-    shown.includes('Diary 27'), JSON.stringify(shown));
+  ok('8b and number 27 is on screen', shown.includes('27'), JSON.stringify(shown));
   await ctx.close();
 }
 
@@ -311,7 +322,7 @@ async function boot(items) {
   let o = -30;
   for (let i = 1; i <= 45; i++) {
     run.push({
-      id: 'e' + i, title: `Diary ${i}`,
+      id: 'e' + i, title: '',
       /* number on line one, writing, then the real number as a tag —
          shuffled so entry i actually belongs at 46 - i */
       body: `${i}\nsomething I wrote on day ${i}\n#${46 - i}`,
@@ -320,7 +331,7 @@ async function boot(items) {
     });
   }
   /* the one from the screenshot, verbatim */
-  run[2] = { id: 'shot', title: 'Diary 3',
+  run[2] = { id: 'shot', title: '',
     body: '3\nIt has been over a week since I last video called her\n#17',
     status: 'draft', when: 'T-28', tags: '', notes: '', media: [] };
 
@@ -340,16 +351,16 @@ async function boot(items) {
       middle: it.body.split('\n')[1],
       when: it.when,
       /* where T-28 sat before, and where the 17th entry sits now */
-      seventeenth: off(all.find(x => D.diaryNo(x.title) === 17).when),
+      seventeenth: off(all.find(x => D.diaryNo(x) === 17).when),
       everyFirstLineMatches: all.every(x => {
-        const n = D.diaryNo(x.title);
+        const n = D.diaryNo(x);
         const b = x.body.split('\n')[0].trim();
         return !/^\d+$/.test(b) || +b === n;
       }),
     };
   });
 
-  ok('9 the title becomes Diary 17', r.title === 'Diary 17', r.title);
+  ok('9 the entry becomes number 17', r.firstLine === '17', JSON.stringify(r.firstLine));
   ok('9b the first line of the text becomes 17', r.firstLine === '17', JSON.stringify(r.firstLine));
   ok('9c the writing itself is untouched',
     r.middle === 'It has been over a week since I last video called her', JSON.stringify(r.middle));
@@ -357,7 +368,7 @@ async function boot(items) {
   ok('9e it is no longer on T-28', r.when !== 'T-28', r.when);
   ok('9f it moves to where the seventeenth entry belongs \u2014 T-14',
     r.when === 'T-14', `${r.when} (17th slot is T${r.seventeenth})`);
-  ok('9g and across all 45, every first line agrees with its title',
+  ok('9g and across all 45, every first line is the number the app reads',
     r.everyFirstLineMatches, String(r.everyFirstLineMatches));
   await ctx.close();
 }
@@ -365,9 +376,9 @@ async function boot(items) {
 /* ---- 10. a first line that is not a bare number is left alone ---- */
 {
   const { ctx, page } = await boot([
-    { id: 'p', title: 'Diary 1', body: 'Not a number up here\nbody\n#9',
+    { id: 'p', title: '', body: 'Not a number up here\nbody\n#9',
       status: 'draft', when: 'T-30', tags: '', notes: '', media: [] },
-    { id: 'q', title: 'Diary 2', body: '2\nbody\n#4',
+    { id: 'q', title: '', body: '2\nbody\n#4',
       status: 'draft', when: 'T-29', tags: '', notes: '', media: [] },
   ]);
   const r = await page.evaluate(async () => {
@@ -382,7 +393,8 @@ async function boot(items) {
     };
   });
   ok('10 a prose first line is never overwritten', r.prose === 'Not a number up here', r.prose);
-  ok('10b but its title still changes', r.proseTitle === 'Diary 9', r.proseTitle);
+  ok('10b an entry with no number on line one has nowhere to write one, so it is left alone',
+    r.prose === 'Not a number up here', r.prose);
   ok('10c and a numbered first line does move', r.numbered === '4', r.numbered);
   await ctx.close();
 }

@@ -36,7 +36,7 @@ async function boot() {
       rec({ content: { thread: items }, setupDone: {}, notes: '', stats: [], handle: '', profileUrl: '' }));
     localStorage.setItem('sid.v2.local.slice.settings',
       rec({ artist: 'Si', song: "She Won't", releaseDate: release, mode: 'execution',
-            themeMode: 'dark', accent: 'ember', seedsRemoved: true }));
+            themeMode: 'dark', accent: 'ember', seedsRemoved: true, textTitlesCleared: true, diaryResequenced: true }));
   }, [seedX(), RELEASE]);
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.Sid && !document.querySelector('#app').hidden, null, { timeout: 25000 });
