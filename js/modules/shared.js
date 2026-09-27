@@ -582,27 +582,46 @@ function matches(item, q) {
    preview costs a line per row and tells you nothing, so the row
    shows the writing instead. The body itself is never touched. */
 function preview(item) {
-  const body = String(item.body || '');
-  const n = diaryNo(item);
-  if (n == null) {
-    /* No title: the row's heading is the first line of the text (see
-       headline below), so the preview starts from the second. Without
-       this the same words appear twice in every row. */
-    const nl = body.indexOf('\n');
-    return nl === -1 ? '' : body.slice(nl + 1);
+  const lines = String(item.body || '').split('\n');
+
+  if (String(item.title || '').trim()) {
+    /* Titled: the title already says the number, so a first line that
+       is only that number is dropped. Everything else stands. */
+    const n = diaryNo(item);
+    return (n != null && lines[0].trim() === String(n))
+      ? lines.slice(1).join('\n')
+      : lines.join('\n');
   }
-  const nl = body.indexOf('\n');
-  if (nl === -1) return body.trim() === String(n) ? '' : body;
-  return body.slice(0, nl).trim() === String(n) ? body.slice(nl + 1) : body;
+
+  /* Untitled: the row is headed by its first real line, so the
+     preview picks up from the one after it — otherwise the same words
+     appear twice in every row. */
+  const hd = headline(item);
+  return hd.from >= 0 ? lines.slice(hd.from + 1).join('\n') : '';
 }
 
 /** What the row is called. A titled item uses its title; an untitled
     one is named by its own first line, which is what you would call
     it anyway. */
 function headline(item) {
-  if (String(item.title || '').trim()) return item.title;
+  if (String(item.title || '').trim()) return { text: item.title, free: false };
+  /* No title, so the entry names itself by its first line. It is NOT
+     cut to a character count here: chopping at 80 lands mid-word with
+     nothing to show for it, which is what made the list look broken.
+     The full line goes in and the CSS trims it with an ellipsis, over
+     two lines, so far more of it is readable. */
+  /* Skip a first line that is only a number: that is the entry's
+     number, not a heading, and a row headed "4" tells you nothing.
+     It is shown in the meta line instead, beside the date. */
+  const lines = String(item.body || '').split('\n').map(l => l.trim());
+  const at = lines.findIndex(l => l && !/^\d{1,3}$/.test(l));
+  return { text: (at === -1 ? '' : lines[at]) || 'Untitled', free: true, from: at };
+}
+
+/** The bare number on the first line, if the entry carries one. */
+function leadNo(item) {
   const first = String(item.body || '').split('\n')[0].trim();
-  return first.slice(0, 80) || 'Untitled';
+  return /^\d{1,3}$/.test(first) ? first : null;
 }
 
 /**
@@ -735,10 +754,12 @@ export function contentList({ slice, store, type, pathHint, platformKey, onChang
         const iso = resolveDate(item.when, set.releaseDate);
         list.append(h('div', { class: 'item', onClick: () => open(item) },
           h('div', { class: 'item-head' },
-            h('span', { class: 'item-title', text: headline(item) }),
+            (() => { const hd = headline(item);
+              return h('span', { class: `item-title ${hd.free ? 'free' : ''}`, text: hd.text }); })(),
             h('span', { class: `tag ${STATUS_TAG[item.status] || ''}`, text: (STATUSES.find(s => s[0] === item.status) || ['', 'Draft'])[1] })),
           preview(item) ? h('div', { class: 'item-body', text: preview(item) }) : null,
           h('div', { class: 'item-meta' },
+            leadNo(item) ? h('span', { class: 'mono', text: '#' + leadNo(item) }) : null,
             item.when ? h('span', { text: iso ? `${fmtDate(iso)} · ${tLabel(iso, set.releaseDate) || relativeDay(iso)}` : item.when }) : null,
             item.media?.length ? h('span', { text: `${item.media.length} attachment${item.media.length > 1 ? 's' : ''}` }) : null,
             item.tags ? h('span', { text: item.tags }) : null,

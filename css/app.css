@@ -284,6 +284,14 @@ select.inp{cursor:pointer}
 .item:hover{border-color:var(--fg-3)}
 .item-head{display:flex;align-items:center;gap:8px}
 .item-title{font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A row with no title is named by its own first line, which is prose
+   rather than a label — so it gets two lines and wraps, instead of
+   being clipped to one. */
+.item-title.free{
+  white-space:normal;text-overflow:unset;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  line-height:1.35;
+}
 .item-body{color:var(--fg-2);font-size:13px;margin-top:5px;white-space:pre-wrap;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .item-meta{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--fg-3);flex-wrap:wrap}

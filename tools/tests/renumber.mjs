@@ -302,7 +302,9 @@ async function boot(items) {
   const shown = await page.evaluate(async () => {
     location.hash = '#/p/x/thread';
     await new Promise(r => setTimeout(r, 1400));
-    return [...document.querySelectorAll('#view .item-title')].map(t => t.textContent);
+    /* rows are headed by prose now; the number sits in the meta line */
+    return [...document.querySelectorAll('#view .item')]
+      .map(i => (i.querySelector('.item-meta .mono')?.textContent || '').replace('#', ''));
   });
   const nums = shown.map(t => { const m = String(t).match(/^(\d{1,3})$/); return m ? +m[1] : null; })
     .filter(n => n != null);

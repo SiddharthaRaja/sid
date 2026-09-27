@@ -350,3 +350,13 @@ box you actually type in.
 As everywhere here, the assertions that matter are the ones about
 what did NOT change: every body character for character, the
 statuses, and the count.
+
+A note on how a row reads, since it changed twice. With no title, the
+row is headed by the first line of the entry that actually says
+something — a line holding only the entry's number is not a heading,
+so it moves to the meta line beside the date. The heading is never cut
+to a character count: an 80-character slice landed mid-word with no
+ellipsis, which is what made the list look broken. The full line goes
+in and the CSS trims it, over two lines, so far more is readable. The
+preview picks up from the line after the heading, so the same words
+never appear twice in one row.

@@ -157,11 +157,12 @@ const dump = (page) => page.evaluate(() => {
       body: i.querySelector('.item-body')?.textContent || '',
     }));
   });
-  ok('5 each row is named by its own first line',
-    rows[0].head === '1' || /^\d+$/.test(rows[0].head), JSON.stringify(rows.map(r => r.head)));
-  ok('5b and the preview is the rest of it, not the same words again',
-    rows[0].body.startsWith('Where do I even start') && !rows[0].body.startsWith(rows[0].head),
-    JSON.stringify(rows[0]));
+  /* the heading is the first line that says something — a line that
+     is only the entry's number is not a heading */
+  ok('5 each row is named by its own first real line',
+    rows[0].head === 'Where do I even start...', JSON.stringify(rows.map(r => r.head)));
+  ok('5b and the preview picks up after it, not repeating it',
+    !rows[0].body.includes('Where do I even start'), JSON.stringify(rows[0]));
   await ctx.close();
 }
 
