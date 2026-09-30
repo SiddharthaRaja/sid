@@ -34,6 +34,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/clear-text-titles.mjs
     node tools/tests/one-day-each.mjs
     node tools/tests/notepad-layout.mjs
+    node tools/tests/unboxed-fields.mjs
 
 ## What each one holds the line on
 
@@ -381,3 +382,18 @@ renaming saves, the syllable gutter still counts, the word count is
 still there, and switching section still switches the text. On a phone
 it also checks the Copy / move / Delete row is not stranded past the
 end of the page, which it was on the first attempt.
+
+**unboxed-fields.mjs** — no boxes around the writing, anywhere in the
+app. A filled, bordered, rounded box around every field eats about
+22px of width and 18px of height each, stacks visible edges down the
+page, and boxes in the one thing you came here to do. So a single-line
+field is now a line, and somewhere you write paragraphs is nothing at
+all until you are in it.
+
+The risk with taking a box away is that the field stops being
+findable, so that is what this checks, in both themes: the writing
+area has no border and no fill and runs the full width of the sheet,
+a single-line field still carries a visible rule, that rule changes
+colour on focus so you can see where you are, and a select still
+reads as a control you open rather than text. Then the obvious one —
+typing into an unboxed field still saves, single-line and multi-line.
