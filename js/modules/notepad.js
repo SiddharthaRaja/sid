@@ -161,14 +161,18 @@ function renameSong(song) {
 function editor(song) {
   const box = h('div');
 
+  /* One row, not three. The title is the song's name, so it reads as
+     a heading and only shows it is editable when you are in it — a
+     boxed input for a thing you type once is three rows of chrome
+     between you and the writing. */
   const title = h('input', {
-    class: 'inp', value: song.title || '', maxLength: 120,
-    style: { fontWeight: '600' },
+    class: 'inp np-title', value: song.title || '', maxLength: 120,
+    placeholder: 'Untitled',
     onInput: (e) => { song.title = e.target.value; touchSong(song); },
   });
 
-  box.append(h('div', { class: 'row', style: { marginBottom: '10px' } },
-    btn('←', () => { NP().open = null; save(); rerender(); }, { cls: 'btn-sm' }),
+  box.append(h('div', { class: 'np-head' },
+    btn('\u2190', () => { NP().open = null; save(); rerender(); }, { cls: 'btn-sm btn-ghost' }),
     title,
     metroButton(),
     btn('Export', () => exportSong(song), { cls: 'btn-sm btn-ghost' })));
@@ -233,7 +237,8 @@ function sectionsPane(song) {
     if (!sec) return;
 
     const name = h('input', {
-      class: 'inp', value: sec.name || '', maxLength: 60,
+      class: 'inp np-secname', value: sec.name || '', maxLength: 60,
+      placeholder: 'Section',
       onInput: (e) => { sec.name = e.target.value; touchSong(song); drawTabs(); },
     });
 
@@ -272,15 +277,19 @@ function sectionsPane(song) {
 
     const counts = h('span', { class: 'small muted', text: countLine(sec) });
 
-    paneBody.append(card(
-      h('div', { class: 'row' }, name, status),
+    /* No card around the writing. A card puts a border and two lots
+       of padding between the page edge and the words; the page is
+       already the container. The text runs the full width instead,
+       and everything else is one quiet line under it. */
+    paneBody.append(h('div', { class: 'np-pane' },
+      h('div', { class: 'np-secline' }, name, status),
       h('div', { class: 'np-edit' }, gutter, area),
-      h('div', { class: 'row', style: { marginTop: '8px', justifyContent: 'space-between' } },
+      h('div', { class: 'np-foot' },
         counts,
         h('div', { class: 'row' },
           btn('Copy', () => { copy(sec.content || ''); toast('Copied'); }, { cls: 'btn-sm btn-ghost' }),
-          btn('↑', () => moveSection(song, sec, -1, drawTabs, drawBody), { cls: 'btn-sm btn-ghost' }),
-          btn('↓', () => moveSection(song, sec, 1, drawTabs, drawBody), { cls: 'btn-sm btn-ghost' }),
+          btn('\u2191', () => moveSection(song, sec, -1, drawTabs, drawBody), { cls: 'btn-sm btn-ghost', title: 'Move up' }),
+          btn('\u2193', () => moveSection(song, sec, 1, drawTabs, drawBody), { cls: 'btn-sm btn-ghost', title: 'Move down' }),
           btn('Delete', () => confirmDelete(sec.name || 'this section', () => {
             song.sections = song.sections.filter(x => x.id !== sec.id);
             song.openSection = (song.sections[0] || {}).id || null;

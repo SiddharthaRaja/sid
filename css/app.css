@@ -888,13 +888,70 @@ body.kb-open .offline-strip{display:none}
 .card.clickable:hover{border-color:var(--accent-line)}
 
 /* ---- the lyric editor with its syllable gutter ---- */
-.np-edit{display:flex;gap:8px;align-items:flex-start;margin-top:10px}
+/* ---------- Notepad ----------
+   A place to write should be mostly the thing you write in. The
+   header is one row, the song and section names read as headings
+   rather than form fields, and the text runs the full width of the
+   page with no card around it. */
+
+.np-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.np-head .btn{flex:0 0 auto}
+
+/* a heading you can type in: no box until you are in it */
+.np-title,.np-secname{
+  flex:1;min-width:0;
+  background:transparent;border:1px solid transparent;
+  padding:6px 8px;border-radius:9px;
+}
+.np-title{font-size:var(--fs-h2);font-weight:600}
+.np-secname{font-size:var(--fs-head);font-weight:500;color:var(--fg-2)}
+.np-title:hover,.np-secname:hover{border-color:var(--line)}
+.np-title:focus,.np-secname:focus{
+  background:var(--bg-2);border-color:var(--accent-line);box-shadow:none;
+}
+
+.np-secline{display:flex;align-items:center;gap:10px;margin-top:4px}
+
+/* the writing runs edge to edge — the negative margin cancels the
+   page's own padding, so nothing is inset inside anything */
+.np-pane{margin:0 -18px}
+.np-pane > *{padding-inline:18px}
+
+.np-foot{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin-top:6px;flex-wrap:wrap;
+}
+
+.np-edit{display:flex;gap:8px;align-items:flex-start;margin-top:8px}
 .syl-gutter{
   flex:0 0 26px;text-align:right;font:500 11px/1 var(--mono);color:var(--fg-3);
   overflow:hidden;user-select:none;padding-right:2px;
 }
 .sg-line{white-space:nowrap}
-textarea.np-area{flex:1;line-height:1.6;min-height:200px}
+textarea.np-area{
+  flex:1;line-height:1.7;
+  /* tall enough to write into, and it grows from there */
+  min-height:min(58vh, 620px);
+  background:transparent;border:0;border-radius:0;padding:2px 0 0;
+  resize:none;
+}
+textarea.np-area:focus{box-shadow:none;outline:none}
+
+@media (max-width: 880px){
+  /* The page's own padding is narrower here, so the full-bleed
+     margin has to match it or the text sits off-centre. */
+  .np-pane{margin:0 -14px}
+  .np-pane > *{padding-inline:14px}
+  /* Name and status will not share a line at this width without
+     squeezing both, so they stack. */
+  .np-secline{flex-wrap:wrap;gap:6px}
+  .np-secline .seg{width:100%}
+  .np-secline .seg button{flex:1}
+  /* Shorter, so the row under the text is reachable without a long
+     scroll past an empty box. It still grows as you write. */
+  textarea.np-area{min-height:38vh}
+  .np-foot{gap:6px}
+}
 .np-full{
   white-space:pre-wrap;font:400 13.5px/1.7 inherit;color:var(--fg);
   background:var(--bg-inset);border:1px solid var(--line);border-radius:var(--r);

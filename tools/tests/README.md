@@ -33,6 +33,7 @@ release that touches `js/store.js`, `js/local.js`, `js/backend.js` or
     node tools/tests/no-title-on-text.mjs
     node tools/tests/clear-text-titles.mjs
     node tools/tests/one-day-each.mjs
+    node tools/tests/notepad-layout.mjs
 
 ## What each one holds the line on
 
@@ -360,3 +361,23 @@ ellipsis, which is what made the list look broken. The full line goes
 in and the CSS trims it, over two lines, so far more is readable. The
 preview picks up from the line after the heading, so the same words
 never appear twice in one row.
+
+**notepad-layout.mjs** — the Notepad is a place to write, so it should
+be mostly the thing you write in. It had six rows of chrome above the
+text — back button, song title in a box, metronome and export, two tab
+strips, then a section name in another box with status chips — and the
+writing itself sat in a card, inside the page padding, ten lines tall.
+
+Now: one header row, the song and section names read as headings and
+only show a box when you are in them, and the text runs the full width
+of the page with no card and no border of its own. The assertions are
+geometric on purpose — the editor block reaches both page edges to
+within a pixel, the field is over 40% of the window tall, the header's
+four controls share one row (measured on their centres, since they are
+different heights), and the writing starts in the top 230px.
+
+The rest checks nothing was lost in the tidying: typing saves,
+renaming saves, the syllable gutter still counts, the word count is
+still there, and switching section still switches the text. On a phone
+it also checks the Copy / move / Delete row is not stranded past the
+end of the page, which it was on the first attempt.
